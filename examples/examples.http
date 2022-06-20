@@ -1,0 +1,22 @@
+### Create new index
+
+PUT http://localhost:8080/newindex
+
+
+##### Index a document:
+
+POST http://localhost:8080/newindex/_create
+
+{
+  "foo": "bar"
+}
+
+######## Basic term searching:
+
+POST http://localhost:8080/newindex/_search 
+
+{
+  "query": {
+    "term": {"foo": "bar"}
+  }
+}
