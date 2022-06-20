@@ -109,6 +109,23 @@ func (s *Server) CreateIndexHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(j)
 }
 
+type SearchResponse struct {
+	Took         int                    `json:"took"`
+	TimedOut     bool                   `json:"timed_out"`
+	Shards       ShardsInfo             `json:"_shards"`
+	Hits         *Hits                  `json:"hits"`
+	Aggregations map[string]Aggregation `json:"aggregations,omitempty"`
+}
+
+type Hits struct {
+	Total int        `json:"total"`
+	Hits  []Document `json:"hits"`
+}
+type Aggregation struct {
+	DocCountErrorUpperBound int        `json:"doc_count_error_upper_bound"`
+	Buckets                 []Document `json:"buckets"`
+}
+
 func (s *Server) SearchDocumentHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	index := vars["index"]
@@ -126,7 +143,22 @@ func (s *Server) SearchDocumentHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	docs := s.SearchItem(index, q)
-	j, _ := json.Marshal(docs)
+	sr := &SearchResponse{
+		Took:     123,
+		TimedOut: false,
+		Shards:   MakeShardsInfo(),
+		Hits: &Hits{
+			Total: len(docs),
+			Hits:  docs,
+		},
+	}
+	/*
+		// Add handling for the different result type we'll get for aggregates
+		if q.Aggs != nil {
+			sr.Aggregations[q.Aggs[0].Name] =
+		}
+	*/
+	j, _ := json.Marshal(sr)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(j)
 }

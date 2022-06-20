@@ -29,9 +29,10 @@ var (
 )
 
 type Dsl struct {
-	Query *Query `"{" ( "query" ":" @@ ","?`
-	Size  *int   `| "size" ":" @Number ","?`
-	Sort  *Sort  `| "sort" ":" "{" @@ "}" ","?)+ "}"`
+	Query *Query       `"{" ( "query" ":" @@ ","?`
+	Size  *int         `| "size" ":" @Number ","?`
+	Aggs  []*Aggregate `| "aggs" ":" "{" @@* "}" ","?`
+	Sort  []*Sort      `| "sort" ":" "[" @@* "]" ","?)+ "}"`
 }
 
 // https://www.elastic.co/guide/en/elasticsearch/reference/current/search-search.html#search-search-api-example
@@ -40,6 +41,7 @@ type Dsl struct {
 type Query struct {
 	Term  *Term  `"{" ( "term" ":" "{" @@ "}"`
 	Match *Match `| "match" ":" "{" @@ "}"`
+	Range *Range `| "range" ":" "{" @@ "}"`
 	Bool  *Bool  `| "bool" ":" "{" @@ "}" ) "}"`
 }
 
@@ -64,10 +66,31 @@ type Match struct {
 	Properties []*Property `@@*`
 }
 
+type Range struct {
+	Field        string       `@String ":"`
+	RangeOptions RangeOptions `"{" @@ "}" `
+}
+
+type RangeOptions struct {
+	Gt     *string `( "gt" ":" @String ","?`
+	Gte    *string `| "gte" ":" @String ","?`
+	Lt     *string `| "lt" ":" @String ","?`
+	Lte    *string `| "lte" ":" @String ","?`
+	Format *string `| "format" ":" @String ","?`
+	Boost  *string `| "boost" ":" @String )+`
+}
+
+// https://www.elastic.co/guide/en/elasticsearch/reference/current/sort-search-results.html
 type Sort struct {
 	// Pos   lexer.Position
-	Value string `@String`
+	Field     string    `"{" @String ":"`
+	SortOrder SortOrder `"{" @@ "}" "}"`
 }
+
+type SortOrder struct {
+	Order string `"order" ":" @String`
+}
+
 type Property struct {
 	// Pos   lexer.Position
 	Key   string `@String ":"`

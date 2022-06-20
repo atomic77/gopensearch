@@ -55,3 +55,51 @@ func TestNestedBoolSingle(t *testing.T) {
 	require.NoError(t, err)
 	repr.Println(dsl)
 }
+
+func TestSort(t *testing.T) {
+	dsl := &Dsl{}
+	err := DslParser.ParseString("", `
+	{
+	  "query": {
+		"term": { "foo": "bar", "oof": "rab" }
+	  },
+      "sort":[{"asdf":{"order":"desc"}}]
+    }`, dsl)
+	require.NoError(t, err)
+	repr.Println(dsl)
+}
+
+func TestRange(t *testing.T) {
+	q := &Dsl{}
+	err := DslParser.ParseString("", `
+	{
+	  "query": {
+		"range":{ 
+			"fooTime": {
+				"gte":"1654718054570",
+				"lte":"1655322854570",
+				"format":"epoch_millis"
+			}
+		}
+	  }
+    }`, q)
+	require.NoError(t, err)
+	repr.Println(q)
+}
+
+func TestAggTerms(t *testing.T) {
+	q := &Dsl{}
+	err := DslParser.ParseString("", `
+	{
+	    "aggs":{
+	        "generalStatus":{
+	            "terms":{"field":"foo"}
+			}
+	    },
+	    "size":0,
+		"query": { "term": { "foo": "bar", "oof": "rab" } }
+	}
+    `, q)
+	require.NoError(t, err)
+	repr.Println(q)
+}

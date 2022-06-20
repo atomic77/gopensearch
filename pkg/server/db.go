@@ -50,8 +50,6 @@ and ftidx MATCH 'earth';
 
 */
 func (s *Server) SearchItem(index string, q *dsl.Dsl) []Document {
-	/* Implements a crude version of terms filter, using json_extract
-	to do direct match against fields */
 	sql, err := GenSql(index, q)
 	if err != nil {
 		panic(err)
