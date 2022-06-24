@@ -49,7 +49,7 @@ where json_extract(ftidx.content, '$.a') = 123
 and ftidx MATCH 'earth';
 
 */
-func (s *Server) SearchItem(index string, q *dsl.Dsl) []Document {
+func (s *Server) SearchItem(index string, q *dsl.Dsl) ([]Document, []Bucket) {
 	sql, err := GenSql(index, q)
 	if err != nil {
 		panic(err)
@@ -61,16 +61,33 @@ func (s *Server) SearchItem(index string, q *dsl.Dsl) []Document {
 	}
 	defer rows.Close()
 
-	var result []Document
-	for rows.Next() {
-		doc := Document{}
-		var s string
-		err2 := rows.Scan(&doc.Id, &s)
-		json.Unmarshal([]byte(s), &doc.Content)
-		if err2 != nil {
-			panic(err2)
+	var (
+		buckets []Bucket
+		docs    []Document
+	)
+	// FIXME These shouldn't be mutually exclusive!
+	if q.Aggs != nil {
+		for rows.Next() {
+			b := Bucket{}
+			err2 := rows.Scan(&b.Key, &b.DocCount)
+			if err2 != nil {
+				panic(err2)
+			}
+			buckets = append(buckets, b)
 		}
-		result = append(result, doc)
+
+	} else {
+
+		for rows.Next() {
+			doc := Document{}
+			var s string
+			err2 := rows.Scan(&doc.Id, &s)
+			json.Unmarshal([]byte(s), &doc.Content)
+			if err2 != nil {
+				panic(err2)
+			}
+			docs = append(docs, doc)
+		}
 	}
-	return result
+	return docs, buckets
 }

@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/atomic77/gopensearch/pkg/dsl"
@@ -15,7 +16,6 @@ func GenSql(index string, q *dsl.Dsl) (string, error) {
 	if q.Aggs != nil {
 		ai, _ := handleAggs(q.Aggs)
 
-		// sql := " SELECT "
 		sql = fmt.Sprintf(
 			`SELECT %s FROM "%s" WHERE %s  GROUP BY %s`,
 			ai.selectExpr, index, wh, ai.aggrAlias,
@@ -39,6 +39,9 @@ func GenSql(index string, q *dsl.Dsl) (string, error) {
 // Generate sql statement for a given Query DSL
 func genQueryWherePredicates(q *dsl.Dsl) (string, error) {
 	var sql string
+	if q.Query == nil {
+		return " 1 = 1 ", nil
+	}
 	if q.Query.Bool != nil {
 		sql += handleBool(q.Query.Bool)
 	} else if q.Query.Term != nil {
@@ -62,6 +65,8 @@ func handleBool(b *dsl.Bool) string {
 				sqlFragments = append(sqlFragments, handleTermOrMatch(v.Match.Properties))
 			} else if v.Term != nil {
 				sqlFragments = append(sqlFragments, handleTermOrMatch(v.Term.Properties))
+			} else if v.Range != nil {
+				sqlFragments = append(sqlFragments, handleRange(v.Range))
 			}
 		}
 		sqlWhere += strings.Join(sqlFragments, " AND ")
@@ -78,13 +83,26 @@ func handleBool(b *dsl.Bool) string {
 func handleTermOrMatch(props []*dsl.Property) string {
 	var preds []string
 	for _, prop := range props {
-		// TODO This will only work with string types
-		s := fmt.Sprintf(` JSON_EXTRACT(content, '$.%s') = '%s' `, prop.Key, prop.Value)
+		key := cleanseKeyField(prop.Key)
+		iVal, err := strconv.ParseInt(prop.Value, 10, 64)
+		var s string
+		if err == nil {
+			// Interpret this as an integer
+			s = fmt.Sprintf(` JSON_EXTRACT(content, '$.%s') = %d `, key, iVal)
+		} else {
+			s = fmt.Sprintf(` JSON_EXTRACT(content, '$.%s') = '%s' `, key, prop.Value)
+		}
 		preds = append(preds, s)
 		// t := fmt.Sprintf(" %s MATCH '%s'", index, v)
 	}
 
 	return strings.Join(preds, " AND ")
+}
+
+func cleanseKeyField(f string) string {
+	// Strip away .keyword since we don't distinguish it
+	key := strings.Split(f, ".keyword")[0]
+	return key
 }
 
 func handleRange(rng *dsl.Range) string {
@@ -143,11 +161,10 @@ func handleAggs(aggs []*dsl.Aggregate) (*aggregateInfo, error) {
 			ai := &aggregateInfo{}
 			ai.aggrAlias = fmt.Sprintf("%s%d", "a", i)
 			ai.groupAlias = fmt.Sprintf("%s%d", "g", i)
+			fld := cleanseKeyField(a.Aggregation.Terms.Field)
 			ai.selectExpr = fmt.Sprintf(
 				` JSON_EXTRACT(content, '$.%s') as %s, COUNT(*) as %s`,
-				a.Aggregation.Terms.Field,
-				ai.aggrAlias,
-				ai.groupAlias,
+				fld, ai.aggrAlias, ai.groupAlias,
 			)
 			return ai, nil
 		}

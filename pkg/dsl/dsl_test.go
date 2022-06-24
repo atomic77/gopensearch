@@ -71,13 +71,14 @@ func TestSort(t *testing.T) {
 
 func TestRange(t *testing.T) {
 	q := &Dsl{}
+	// Not sure if this is compliant, but we'll change both of these gte/lte to strings internally
 	err := DslParser.ParseString("", `
 	{
 	  "query": {
 		"range":{ 
 			"fooTime": {
-				"gte":"1654718054570",
-				"lte":"1655322854570",
+				"gte": 1654718054570,
+				"lte": "1655322854570",
 				"format":"epoch_millis"
 			}
 		}

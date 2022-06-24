@@ -72,10 +72,10 @@ type Range struct {
 }
 
 type RangeOptions struct {
-	Gt     *string `( "gt" ":" @String ","?`
-	Gte    *string `| "gte" ":" @String ","?`
-	Lt     *string `| "lt" ":" @String ","?`
-	Lte    *string `| "lte" ":" @String ","?`
+	Gt     *string `( "gt" ":" @( String | Number )","?`
+	Gte    *string `| "gte" ":" @( String | Number )","?`
+	Lt     *string `| "lt" ":" @( String | Number )","?`
+	Lte    *string `| "lte" ":" @( String | Number )","?`
 	Format *string `| "format" ":" @String ","?`
 	Boost  *string `| "boost" ":" @String )+`
 }
@@ -94,5 +94,5 @@ type SortOrder struct {
 type Property struct {
 	// Pos   lexer.Position
 	Key   string `@String ":"`
-	Value string `@String ","?`
+	Value string `@( String | Number ) ","?`
 }

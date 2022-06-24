@@ -122,8 +122,14 @@ type Hits struct {
 	Hits  []Document `json:"hits"`
 }
 type Aggregation struct {
-	DocCountErrorUpperBound int        `json:"doc_count_error_upper_bound"`
-	Buckets                 []Document `json:"buckets"`
+	DocCountErrorUpperBound int      `json:"doc_count_error_upper_bound"`
+	Buckets                 []Bucket `json:"buckets"`
+}
+
+type Bucket struct {
+	KeyAsString string `json:"key_as_string,omitempty"`
+	Key         string `json:"key"`
+	DocCount    int    `json:"doc_count"`
 }
 
 func (s *Server) SearchDocumentHandler(w http.ResponseWriter, r *http.Request) {
@@ -142,7 +148,7 @@ func (s *Server) SearchDocumentHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	docs := s.SearchItem(index, q)
+	docs, buckets := s.SearchItem(index, q)
 	sr := &SearchResponse{
 		Took:     123,
 		TimedOut: false,
@@ -152,12 +158,13 @@ func (s *Server) SearchDocumentHandler(w http.ResponseWriter, r *http.Request) {
 			Hits:  docs,
 		},
 	}
-	/*
-		// Add handling for the different result type we'll get for aggregates
-		if q.Aggs != nil {
-			sr.Aggregations[q.Aggs[0].Name] =
+	// Add handling for the different result type we'll get for aggregates
+	if q.Aggs != nil {
+		sr.Aggregations = make(map[string]Aggregation)
+		sr.Aggregations[q.Aggs[0].Name] = Aggregation{
+			Buckets: buckets,
 		}
-	*/
+	}
 	j, _ := json.Marshal(sr)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(j)
