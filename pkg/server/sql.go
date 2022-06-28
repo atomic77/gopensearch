@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/atomic77/gopensearch/pkg/date"
 	"github.com/atomic77/gopensearch/pkg/dsl"
 )
 
@@ -106,22 +107,25 @@ func cleanseKeyField(f string) string {
 }
 
 func handleRange(rng *dsl.Range) string {
-	// TODO Generates something, but the format and casting of dates from the string input
-	// coming in needs to be properly handled
-	var preds []string
+	// Currently only working for date ranges
+	var (
+		preds []string
+	)
+	fmtFn := date.DateFormatFn(*rng.RangeOptions.Format)
+
 	if rng.RangeOptions.Lte != nil {
-		s := fmt.Sprintf(` JSON_EXTRACT(content, '$.%s') <= '%s' `, rng.Field, *rng.RangeOptions.Lte)
+		s := fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s')) <= '%s' `, rng.Field, fmtFn(*rng.RangeOptions.Lte))
 		preds = append(preds, s)
 	} else if rng.RangeOptions.Lt != nil {
-		s := fmt.Sprintf(` JSON_EXTRACT(content, '$.%s') < '%s' `, rng.Field, *rng.RangeOptions.Lt)
+		s := fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s')) < '%s' `, rng.Field, fmtFn(*rng.RangeOptions.Lt))
 		preds = append(preds, s)
 	}
 
 	if rng.RangeOptions.Gte != nil {
-		s := fmt.Sprintf(` JSON_EXTRACT(content, '$.%s') >= '%s' `, rng.Field, *rng.RangeOptions.Gte)
+		s := fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s')) >= '%s' `, rng.Field, fmtFn(*rng.RangeOptions.Gte))
 		preds = append(preds, s)
 	} else if rng.RangeOptions.Gt != nil {
-		s := fmt.Sprintf(` JSON_EXTRACT(content, '$.%s') > '%s' `, rng.Field, *rng.RangeOptions.Gt)
+		s := fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s')) > '%s' `, rng.Field, fmtFn(*rng.RangeOptions.Gt))
 		preds = append(preds, s)
 	}
 
