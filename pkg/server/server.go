@@ -117,13 +117,38 @@ type SearchResponse struct {
 	Aggregations map[string]Aggregation `json:"aggregations,omitempty"`
 }
 
+type Aggregation interface {
+	GetAggregateCategory() dsl.AggregationCategory
+	SerializeResultset(rows *sql.Rows)
+}
+
 type Hits struct {
 	Total int        `json:"total"`
 	Hits  []Document `json:"hits"`
 }
-type Aggregation struct {
+type MetricSingleAggregation struct {
+	Value float64 `json:"value"`
+}
+
+func (m MetricSingleAggregation) GetAggregateCategory() dsl.AggregationCategory {
+	return dsl.MetricsSingle
+}
+
+type MetricMultipleAggregation struct {
+	Values []float64 `json:"values"`
+}
+
+func (m MetricMultipleAggregation) GetAggregateCategory() dsl.AggregationCategory {
+	return dsl.MetricsMultiple
+}
+
+type BucketAggregation struct {
 	DocCountErrorUpperBound int      `json:"doc_count_error_upper_bound"`
 	Buckets                 []Bucket `json:"buckets"`
+}
+
+func (m BucketAggregation) GetAggregateCategory() dsl.AggregationCategory {
+	return dsl.Bucket
 }
 
 type Bucket struct {
@@ -148,7 +173,7 @@ func (s *Server) SearchDocumentHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	docs, buckets := s.SearchItem(index, q)
+	docs, aggs := s.SearchItem(index, q)
 	sr := &SearchResponse{
 		Took:     123,
 		TimedOut: false,
@@ -159,11 +184,10 @@ func (s *Server) SearchDocumentHandler(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 	// Add handling for the different result type we'll get for aggregates
-	if q.Aggs != nil {
+	// if q.Aggs != nil {
+	for i, a := range q.Aggs {
 		sr.Aggregations = make(map[string]Aggregation)
-		sr.Aggregations[q.Aggs[0].Name] = Aggregation{
-			Buckets: buckets,
-		}
+		sr.Aggregations[a.Name] = aggs[i]
 	}
 	j, _ := json.Marshal(sr)
 	w.Header().Set("Content-Type", "application/json")

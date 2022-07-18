@@ -1,8 +1,10 @@
 package server
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/atomic77/gopensearch/pkg/dsl"
 )
@@ -49,45 +51,78 @@ where json_extract(ftidx.content, '$.a') = 123
 and ftidx MATCH 'earth';
 
 */
-func (s *Server) SearchItem(index string, q *dsl.Dsl) ([]Document, []Bucket) {
-	sql, err := GenSql(index, q)
+func (s *Server) SearchItem(index string, q *dsl.Dsl) ([]Document, []Aggregation) {
+	var (
+		aggs []Aggregation
+		docs []Document
+	)
+
+	subQueries, err := GenPlan(index, q)
 	if err != nil {
 		panic(err)
 	}
-	println(sql)
-	rows, err := s.db.Query(sql)
+	for _, q := range subQueries {
+
+		log.Println(q.sql)
+		rows, err := s.db.Query(q.sql)
+		if err != nil {
+			panic(err)
+		}
+		defer rows.Close()
+		if q.aggregation != nil {
+			q.aggregation.SerializeResultset(rows)
+			aggs = append(aggs, q.aggregation)
+
+		} else {
+			docs = s.execHitsSubquery(q)
+		}
+	}
+	return docs, aggs
+}
+
+func (m *BucketAggregation) SerializeResultset(rows *sql.Rows) {
+	for rows.Next() {
+		b := Bucket{}
+		err := rows.Scan(&b.Key, &b.DocCount)
+		if err != nil {
+			panic(err)
+		}
+		m.Buckets = append(m.Buckets, b)
+	}
+}
+
+func (m *MetricMultipleAggregation) SerializeResultset(rows *sql.Rows) {
+	// TODO IMPLEMENT ME as with Bucket aggregation
+}
+
+func (m *MetricSingleAggregation) SerializeResultset(rows *sql.Rows) {
+	for rows.Next() {
+		err := rows.Scan(&m.Value)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func (s *Server) execHitsSubquery(q dbSubQuery) []Document {
+
+	var docs []Document
+	log.Println(q.sql)
+	rows, err := s.db.Query(q.sql)
 	if err != nil {
 		panic(err)
 	}
 	defer rows.Close()
 
-	var (
-		buckets []Bucket
-		docs    []Document
-	)
-	// FIXME These shouldn't be mutually exclusive!
-	if q.Aggs != nil {
-		for rows.Next() {
-			b := Bucket{}
-			err2 := rows.Scan(&b.Key, &b.DocCount)
-			if err2 != nil {
-				panic(err2)
-			}
-			buckets = append(buckets, b)
+	for rows.Next() {
+		doc := Document{}
+		var s string
+		err2 := rows.Scan(&doc.Id, &s)
+		json.Unmarshal([]byte(s), &doc.Content)
+		if err2 != nil {
+			panic(err2)
 		}
-
-	} else {
-
-		for rows.Next() {
-			doc := Document{}
-			var s string
-			err2 := rows.Scan(&doc.Id, &s)
-			json.Unmarshal([]byte(s), &doc.Content)
-			if err2 != nil {
-				panic(err2)
-			}
-			docs = append(docs, doc)
-		}
+		docs = append(docs, doc)
 	}
-	return docs, buckets
+	return docs
 }

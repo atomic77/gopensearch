@@ -9,33 +9,74 @@ import (
 	"github.com/atomic77/gopensearch/pkg/dsl"
 )
 
-func GenSql(index string, q *dsl.Dsl) (string, error) {
+type dbSubQuery struct {
+	sql         string
+	aggregation Aggregation
+}
+
+func GenPlan(index string, q *dsl.Dsl) ([]dbSubQuery, error) {
+
+	plan := make([]dbSubQuery, 0)
+	wh, _ := genQueryWherePredicates(q)
+
+	for _, a := range q.Aggs {
+		aggSubQuery := dbSubQuery{}
+		aggSubQuery.sql = "SELECT "
+		aggInfo := genAggregateSelect(a)
+		aggSubQuery.aggregation = aggInfo.aggregation
+		aggSubQuery.sql += aggInfo.selectExpr
+		aggSubQuery.sql += fmt.Sprintf(` FROM "%s" `, index)
+		aggSubQuery.sql += " WHERE "
+		aggSubQuery.sql += wh
+		aggSubQuery.sql += " GROUP BY "
+		aggSubQuery.sql += strings.Join(aggInfo.groupAliases, " , ")
+		plan = append(plan, aggSubQuery)
+	}
+
+	// Handle hits selection case
+	recordQuery := dbSubQuery{}
+	recordQuery.aggregation = nil
+	recordQuery.sql = genHitsSelect(index, q)
+	recordQuery.sql += wh
+	recordQuery.sql += genSort(q.Sort)
+	recordQuery.sql += genLimit(q)
+	plan = append(plan, recordQuery)
+	return plan, nil
+}
+
+/*
+func genSql(index string, q *dsl.Dsl) (string, error) {
 	var sql string
 
 	wh, _ := genQueryWherePredicates(q)
 
 	if q.Aggs != nil {
-		ai, _ := handleAggs(q.Aggs)
+		ai := genAggregateSelect(q.Aggs)
 
 		sql = fmt.Sprintf(
-			`SELECT %s FROM "%s" WHERE %s  GROUP BY %s`,
-			ai.selectExpr, index, wh, ai.aggrAlias,
+			`SELECT %s FROM "%s" WHERE %s `,
+		GROUP BY %s,
+		ai.selectExpr, index, wh, ai.aggre,
 		)
+		ai.aggrAlias,
+		`GROUP BY %s`,
 
 	} else {
-		sql = fmt.Sprintf(`SELECT rowid, JSON(content) FROM "%s" WHERE `, index)
+		sql = genHitsSelect(index, q)
 		sql += wh
 	}
 
 	if q.Sort != nil {
-		sql += handleSort(q.Sort)
+		sql += genSort(q.Sort)
 	}
 
-	if q.Size != nil {
+	if q.Size != nil && q.Aggs == nil {
 		sql += fmt.Sprintf(" LIMIT %d ", *q.Size)
 	}
+
 	return sql, nil
 }
+*/
 
 // Generate sql statement for a given Query DSL
 func genQueryWherePredicates(q *dsl.Dsl) (string, error) {
@@ -132,8 +173,11 @@ func handleRange(rng *dsl.Range) string {
 	return strings.Join(preds, " AND ")
 }
 
-func handleSort(sortFields []*dsl.Sort) string {
+func genSort(sortFields []*dsl.Sort) string {
 
+	if len(sortFields) == 0 {
+		return ""
+	}
 	sql := " ORDER BY "
 	var frags []string
 
@@ -150,28 +194,60 @@ func handleSort(sortFields []*dsl.Sort) string {
 }
 
 type aggregateInfo struct {
-	selectExpr string
-	groupAlias string
-	aggrAlias  string
+	selectExpr   string
+	groupAliases []string
+	fnAliases    []string
+	aggregation  Aggregation
+}
+
+func genHitsSelect(index string, _q *dsl.Dsl) string {
+
+	// TODO Add _source selection capability
+	sql := fmt.Sprintf(`SELECT rowid, JSON(content) FROM "%s" WHERE `, index)
+	return sql
 }
 
 // Returns the field expression for the select, and the alias for the group by
-func handleAggs(aggs []*dsl.Aggregate) (*aggregateInfo, error) {
+func genAggregateSelect(agg *dsl.Aggregate) aggregateInfo {
 	// TODO This will only work with a single aggregation. We'll probably
 	// need to generate two queries to sqlite for each
 
-	for i, a := range aggs {
-		if a.Aggregation.Terms != nil {
-			ai := &aggregateInfo{}
-			ai.aggrAlias = fmt.Sprintf("%s%d", "a", i)
-			ai.groupAlias = fmt.Sprintf("%s%d", "g", i)
-			fld := cleanseKeyField(a.Aggregation.Terms.Field)
-			ai.selectExpr = fmt.Sprintf(
-				` JSON_EXTRACT(content, '$.%s') as %s, COUNT(*) as %s`,
-				fld, ai.aggrAlias, ai.groupAlias,
-			)
-			return ai, nil
-		}
+	ai := aggregateInfo{}
+
+	if agg.AggregateType.Terms != nil {
+		ai.groupAliases = []string{"g0"}
+		ai.fnAliases = []string{"a0"}
+		fld := cleanseKeyField(agg.AggregateType.Terms.Field)
+		ai.selectExpr = fmt.Sprintf(
+			` JSON_EXTRACT(content, '$.%s') as %s, COUNT(*) as %s `,
+			fld, ai.groupAliases[0], ai.fnAliases[0],
+		)
+
+		ai.aggregation = &BucketAggregation{}
+	} else if agg.AggregateType.Avg != nil {
+		ai.fnAliases = []string{"a0"}
+		fld := cleanseKeyField(agg.AggregateType.Avg.Field)
+		ai.selectExpr = fmt.Sprintf(
+			` AVG(JSON_EXTRACT(content, '$.%s')) as %s `,
+			fld, ai.fnAliases[0],
+		)
+		ai.aggregation = &MetricSingleAggregation{}
+	} else if agg.AggregateType.Max != nil {
+		ai.fnAliases = []string{"a0"}
+		fld := cleanseKeyField(agg.AggregateType.Max.Field)
+		ai.selectExpr = fmt.Sprintf(
+			` MAX(JSON_EXTRACT(content, '$.%s')) as %s `,
+			fld, ai.fnAliases[0],
+		)
+		ai.aggregation = &MetricSingleAggregation{}
 	}
-	return nil, nil
+	return ai
+}
+
+func genLimit(q *dsl.Dsl) string {
+	l := 10
+	if q.Size != nil {
+		l = *q.Size
+	}
+	return fmt.Sprintf(` LIMIT %d `, l)
 }

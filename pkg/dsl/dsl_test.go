@@ -87,20 +87,3 @@ func TestRange(t *testing.T) {
 	require.NoError(t, err)
 	repr.Println(q)
 }
-
-func TestAggTerms(t *testing.T) {
-	q := &Dsl{}
-	err := DslParser.ParseString("", `
-	{
-	    "aggs":{
-	        "generalStatus":{
-	            "terms":{"field":"foo"}
-			}
-	    },
-	    "size":0,
-		"query": { "term": { "foo": "bar", "oof": "rab" } }
-	}
-    `, q)
-	require.NoError(t, err)
-	repr.Println(q)
-}

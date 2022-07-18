@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
 
@@ -17,9 +16,8 @@ func main() {
 		},
 	}
 	s.Init()
-	count := flag.Int("asdf", 5, "count")
+	// count := flag.Int("asdf", 5, "count")
 	flag.Parse()
-	log.Println(*count)
-	fmt.Println("Server started at port 8080")
+	log.Println("Server started at port 8080")
 	log.Fatal(http.ListenAndServe(":8080", s.Router))
 }
