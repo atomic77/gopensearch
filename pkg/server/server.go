@@ -183,10 +183,8 @@ func (s *Server) SearchDocumentHandler(w http.ResponseWriter, r *http.Request) {
 			Hits:  docs,
 		},
 	}
-	// Add handling for the different result type we'll get for aggregates
-	// if q.Aggs != nil {
+	sr.Aggregations = make(map[string]Aggregation)
 	for i, a := range q.Aggs {
-		sr.Aggregations = make(map[string]Aggregation)
 		sr.Aggregations[a.Name] = aggs[i]
 	}
 	j, _ := json.Marshal(sr)

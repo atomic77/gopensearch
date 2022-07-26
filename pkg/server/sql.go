@@ -28,8 +28,10 @@ func GenPlan(index string, q *dsl.Dsl) ([]dbSubQuery, error) {
 		aggSubQuery.sql += fmt.Sprintf(` FROM "%s" `, index)
 		aggSubQuery.sql += " WHERE "
 		aggSubQuery.sql += wh
-		aggSubQuery.sql += " GROUP BY "
-		aggSubQuery.sql += strings.Join(aggInfo.groupAliases, " , ")
+		if len(aggInfo.groupAliases) > 0 {
+			aggSubQuery.sql += " GROUP BY "
+			aggSubQuery.sql += strings.Join(aggInfo.groupAliases, " , ")
+		}
 		plan = append(plan, aggSubQuery)
 	}
 
@@ -43,40 +45,6 @@ func GenPlan(index string, q *dsl.Dsl) ([]dbSubQuery, error) {
 	plan = append(plan, recordQuery)
 	return plan, nil
 }
-
-/*
-func genSql(index string, q *dsl.Dsl) (string, error) {
-	var sql string
-
-	wh, _ := genQueryWherePredicates(q)
-
-	if q.Aggs != nil {
-		ai := genAggregateSelect(q.Aggs)
-
-		sql = fmt.Sprintf(
-			`SELECT %s FROM "%s" WHERE %s `,
-		GROUP BY %s,
-		ai.selectExpr, index, wh, ai.aggre,
-		)
-		ai.aggrAlias,
-		`GROUP BY %s`,
-
-	} else {
-		sql = genHitsSelect(index, q)
-		sql += wh
-	}
-
-	if q.Sort != nil {
-		sql += genSort(q.Sort)
-	}
-
-	if q.Size != nil && q.Aggs == nil {
-		sql += fmt.Sprintf(" LIMIT %d ", *q.Size)
-	}
-
-	return sql, nil
-}
-*/
 
 // Generate sql statement for a given Query DSL
 func genQueryWherePredicates(q *dsl.Dsl) (string, error) {

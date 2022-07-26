@@ -2,7 +2,7 @@ package dsl
 
 type Aggregate struct {
 	Name          string        `@String ":"`
-	AggregateType AggregateType `"{" @@ "}"`
+	AggregateType AggregateType `"{" @@ "}" ","?`
 }
 
 type AggregationCategory int

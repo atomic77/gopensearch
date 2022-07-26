@@ -40,3 +40,23 @@ func TestAvg(t *testing.T) {
 	require.NoError(t, err)
 	repr.Println(q)
 }
+
+func TestMultipleSingle(t *testing.T) {
+	q := &Dsl{}
+	err := DslParser.ParseString("", `
+	{
+	    "aggs":{
+	        "avgPrice":{
+	            "avg":{"field":"monies"}
+			},
+	        "maxPrice":{
+	            "max":{"field":"monies"}
+			}
+	    },
+	    "size":0,
+		"query": { "term": { "foo": "bar", "oof": "rab" } }
+	}
+    `, q)
+	require.NoError(t, err)
+	repr.Println(q)
+}

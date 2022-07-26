@@ -13,10 +13,10 @@ Working:
 * Bulk doc creation
 * Basic support for term/match queries against string fields
 * Bool must/should compound queries crudely supported
+* Multiple single-value aggregates
 
 Near-term goals:
-* Improving parsing coverage of Query DSL
-* Basic aggregation 
+* Multi-valued and nested-aggregations
 * Improved test case coverage
 * Improved documentation for what is supported and what isn't, and helpful error messages when unsupported features are used
 
@@ -24,7 +24,13 @@ Future work:
 * Indexing and storage optimizations in sqlite usage
 
 Out of scope:
-* Most things :) Clustering, sharding, etc.
+* Most things :) Clustering, sharding, painless lang, etc.
+
+### Support Matrix
+
+Until I get around to properly documenting what works and what doesn't, 
+you can get an idea for sorts of queries are supported by looking at 
+the test cases in the `pkg/dsl` folder.
 
 ### Why make this?
 
