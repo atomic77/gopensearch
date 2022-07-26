@@ -19,9 +19,12 @@ func TestBasic(t *testing.T) {
 	  "size": 1
     }`, q)
 	require.NoError(t, err)
-	sql, err2 := GenSql("testindex", q)
+	plan, err2 := GenPlan("testindex", q)
+	if len(plan) != 1 {
+		t.Error("Expected only one query in plan")
+	}
 	require.NoError(t, err2)
-	repr.Println(sql)
+	repr.Println(plan)
 }
 
 func TestBool(t *testing.T) {
@@ -35,9 +38,12 @@ func TestBool(t *testing.T) {
 	  "size": 1
     }`, q)
 	require.NoError(t, err)
-	sql, err2 := GenSql("testindex", q)
+	plan, err2 := GenPlan("testindex", q)
 	require.NoError(t, err2)
-	repr.Println(sql)
+	if len(plan) != 1 {
+		t.Error("Expected only one query in plan")
+	}
+	repr.Println(plan)
 }
 
 func TestSort(t *testing.T) {
@@ -50,9 +56,12 @@ func TestSort(t *testing.T) {
       "sort":[{"asdf":{"order":"desc"}}]
     }`, q)
 	require.NoError(t, err)
-	sql, err2 := GenSql("testindex", q)
+	plan, err2 := GenPlan("testindex", q)
+	if len(plan) != 1 {
+		t.Error("Expected only one query in plan")
+	}
 	require.NoError(t, err2)
-	repr.Println(sql)
+	repr.Println(plan)
 }
 
 func TestRange(t *testing.T) {
@@ -70,9 +79,12 @@ func TestRange(t *testing.T) {
 	  }
     }`, q)
 	require.NoError(t, err)
-	sql, err2 := GenSql("testindex", q)
+	plan, err2 := GenPlan("testindex", q)
+	if len(plan) != 1 {
+		t.Error("Expected only one query in plan")
+	}
 	require.NoError(t, err2)
-	repr.Println(sql)
+	repr.Println(plan)
 }
 
 func TestAggTerms(t *testing.T) {
@@ -89,7 +101,13 @@ func TestAggTerms(t *testing.T) {
 	}
     `, q)
 	require.NoError(t, err)
-	sql, err2 := GenSql("testindex", q)
+	plan, err2 := GenPlan("testindex", q)
+	if len(plan) != 2 {
+		t.Error("Expected two queries in plan")
+	}
+	if plan[0].aggregation == nil && plan[0].aggregation.GetAggregateCategory() == dsl.MetricsSingle {
+		t.Error("Expected an aggregation query first")
+	}
 	require.NoError(t, err2)
-	repr.Println(sql)
+	repr.Println(plan)
 }

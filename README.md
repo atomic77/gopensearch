@@ -26,6 +26,20 @@ Future work:
 Out of scope:
 * Most things :) Clustering, sharding, painless lang, etc.
 
+## Building
+
+For Linux amd64:
+
+```bash
+make
+```
+
+For ARM chipsets (32 and 64-bit):
+
+```bash
+make arm
+```
+
 ### Support Matrix
 
 Until I get around to properly documenting what works and what doesn't, 
