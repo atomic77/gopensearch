@@ -192,6 +192,19 @@ func genAggregateSelect(agg *dsl.Aggregate) aggregateInfo {
 		)
 
 		ai.aggregation = &BucketAggregation{}
+	} else if agg.AggregateType.DateHistogram != nil {
+		ai.groupAliases = []string{"g0"}
+		ai.fnAliases = []string{"a0"}
+		fld := cleanseKeyField(agg.AggregateType.Terms.Field)
+		// TODO Can cast dates to an epoch, then divide by the number of seconds the
+		// interval corresponds to, eg:
+		// SELECT strftime("%s", JSON_EXTRACT(content, '$.Time')) / 1234 as a0  FROM "test-202206" LIMIT 5;
+		ai.selectExpr = fmt.Sprintf(
+			` JSON_EXTRACT(content, '$.%s') as %s, COUNT(*) as %s `,
+			fld, ai.groupAliases[0], ai.fnAliases[0],
+		)
+
+		ai.aggregation = &BucketAggregation{}
 	} else if agg.AggregateType.Avg != nil {
 		ai.fnAliases = []string{"a0"}
 		fld := cleanseKeyField(agg.AggregateType.Avg.Field)

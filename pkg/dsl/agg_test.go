@@ -60,3 +60,22 @@ func TestMultipleSingle(t *testing.T) {
 	require.NoError(t, err)
 	repr.Println(q)
 }
+
+func TestDateHistogram(t *testing.T) {
+	q := &Dsl{}
+	DslParser.ParseString("", `
+	{
+	    "aggs":{
+	        "datecounts":{
+	            "date_histogram":{
+					"field":"datefld",
+					"fixed_interval": "3d"
+				}
+			}
+	    },
+	    "size":0
+	}
+    `, q)
+	require.Equal(t, q.Aggs[0].AggregateType.DateHistogram.FixedInterval, "3d")
+	repr.Println(q)
+}

@@ -17,9 +17,11 @@ const (
 type AggregateType struct {
 	// https://www.elastic.co/guide/en/elasticsearch/reference/7.17/search-aggregations.html
 	// Many to be implemented...
-	Terms *AggTerms `( "terms" ":" "{" @@ "}" ","?`
-	Avg   *AggField `| "avg" ":" "{" @@ "}" ","?`
-	Max   *AggField `| "max" ":" "{" @@ "}" ","? )`
+	Terms             *AggTerms          `( "terms" ":" "{" @@ "}" ","?`
+	DateHistogram     *DateHistogram     `| "date_histogram" ":" "{" @@ "}" ","?`
+	AutoDateHistogram *AutoDateHistogram `| "auto_date_histogram" ":" "{" @@ "}" ","?`
+	Avg               *AggField          `| "avg" ":" "{" @@ "}" ","?`
+	Max               *AggField          `| "max" ":" "{" @@ "}" ","? )`
 }
 
 type AggField struct {
@@ -30,6 +32,19 @@ type AggField struct {
 type AggTerms struct {
 	Field string `( "field" ":" @String ","?`
 	Size  int    `| "size" ":" @Number ","? )+`
+}
+
+type DateHistogram struct {
+	Field            string `( "field" ":" @String ","?`
+	Buckets          int    `| "buckets" ":" @Number ","?`
+	FixedInterval    string `| "fixed_interval" ":" @String ","?`
+	CalendarInterval string `| "calendar_interval" ":" @String ","? )+`
+}
+
+type AutoDateHistogram struct {
+	Field           string `( "field" ":" @String ","?`
+	Buckets         int    `| "buckets" ":" @Number ","?`
+	MinimumInterval string `| "buckets" ":" @String ","? )+`
 }
 
 func (a *AggregateType) GenAggregationCategory() AggregationCategory {
