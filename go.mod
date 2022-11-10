@@ -12,4 +12,9 @@ require (
 	github.com/alecthomas/repr v0.1.0
 )
 
-require github.com/hexops/gotextdiff v1.0.3 // indirect
+require github.com/felixge/httpsnoop v1.0.1 // indirect
+
+require (
+	github.com/gorilla/handlers v1.5.1
+	github.com/hexops/gotextdiff v1.0.3 // indirect
+)

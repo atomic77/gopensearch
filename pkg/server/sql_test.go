@@ -111,3 +111,30 @@ func TestAggTerms(t *testing.T) {
 	require.NoError(t, err2)
 	repr.Println(plan)
 }
+
+func TestDateHistogram(t *testing.T) {
+	q := &dsl.Dsl{}
+	err := dsl.DslParser.ParseString("", `
+	{
+	    "aggs":{
+			"dates": {
+				"date_histogram":{"field":"Time","buckets":200},
+			}
+	        "generalStatus":{
+	            "terms":{"field":"foo"}
+			}
+	    },
+	    "size":0
+	}
+    `, q)
+	require.NoError(t, err)
+	plan, err2 := GenPlan("testindex", q)
+	if len(plan) != 3 {
+		t.Error("Expected 3 queries in plan")
+	}
+	if plan[0].aggregation == nil && plan[0].aggregation.GetAggregateCategory() == dsl.MetricsSingle {
+		t.Error("Expected an aggregation query first")
+	}
+	require.NoError(t, err2)
+	repr.Println(plan)
+}

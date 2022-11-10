@@ -51,7 +51,7 @@ where json_extract(ftidx.content, '$.a') = 123
 and ftidx MATCH 'earth';
 
 */
-func (s *Server) SearchItem(index string, q *dsl.Dsl) ([]Document, []Aggregation) {
+func (s *Server) SearchItem(index string, q *dsl.Dsl) ([]Document, []Aggregation, error) {
 	var (
 		aggs []Aggregation
 		docs []Document
@@ -66,7 +66,7 @@ func (s *Server) SearchItem(index string, q *dsl.Dsl) ([]Document, []Aggregation
 		log.Println(q.sql)
 		rows, err := s.db.Query(q.sql)
 		if err != nil {
-			panic(err)
+			return nil, nil, err
 		}
 		defer rows.Close()
 		if q.aggregation != nil {
@@ -77,7 +77,7 @@ func (s *Server) SearchItem(index string, q *dsl.Dsl) ([]Document, []Aggregation
 			docs = s.execHitsSubquery(q)
 		}
 	}
-	return docs, aggs
+	return docs, aggs, nil
 }
 
 func (m *BucketAggregation) SerializeResultset(rows *sql.Rows) {

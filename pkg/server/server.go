@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/atomic77/gopensearch/pkg/dsl"
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -20,7 +22,7 @@ type Config struct {
 
 type Server struct {
 	db     *sql.DB
-	Router *mux.Router
+	Router http.Handler
 	Cfg    Config
 }
 
@@ -41,11 +43,17 @@ func openDb(loc string) *sql.DB {
 }
 
 func (s *Server) registerRoutes() {
-	s.Router = mux.NewRouter()
-	s.Router.HandleFunc("/{index:[a-zA-Z0-9\\-]+}", s.CreateIndexHandler).Methods("PUT")
-	s.Router.HandleFunc("/{index:[a-zA-Z0-9\\-]+}/_create", s.IndexDocumentHandler).Methods("POST")
-	s.Router.HandleFunc("/{index:[a-zA-Z0-9\\-]+}/_search", s.SearchDocumentHandler).Methods("POST")
-	s.Router.HandleFunc("/{index:[a-zA-Z0-9\\-]+}/_bulk", s.BulkHandler).Methods("POST")
+	r := mux.NewRouter()
+	r.HandleFunc("/{index:[a-zA-Z0-9\\-]+}", s.CreateIndexHandler).Methods("PUT")
+	r.HandleFunc("/{index:[a-zA-Z0-9\\-]+}/_create", s.IndexDocumentHandler).Methods("POST")
+	r.HandleFunc("/{index:[a-zA-Z0-9\\-]+}/_search", s.SearchDocumentHandler).Methods("POST")
+	r.HandleFunc("/{index:[a-zA-Z0-9\\-]+}/_bulk", s.BulkHandler).Methods("POST")
+
+	// Administrative functions
+	r.HandleFunc("/", s.HeadHandler).Methods("HEAD")
+	r.HandleFunc("/", s.ClusterStatusHandler).Methods("GET")
+	loggedRouter := handlers.LoggingHandler(os.Stdout, r)
+	s.Router = loggedRouter
 }
 
 func (s *Server) Init() {
@@ -173,7 +181,20 @@ func (s *Server) SearchDocumentHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	docs, aggs := s.SearchItem(index, q)
+	docs, aggs, err := s.SearchItem(index, q)
+	if err != nil {
+		eresp := &GenericErrorResponse{
+			Reason:       err.Error(),
+			Index:        index,
+			ResourceId:   index,
+			ResourceType: "index_or_alias",
+		}
+		j, _ := json.Marshal(eresp)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		w.Write(j)
+		return
+	}
 	sr := &SearchResponse{
 		Took:     123,
 		TimedOut: false,

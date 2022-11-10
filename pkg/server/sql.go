@@ -195,7 +195,7 @@ func genAggregateSelect(agg *dsl.Aggregate) aggregateInfo {
 	} else if agg.AggregateType.DateHistogram != nil {
 		ai.groupAliases = []string{"g0"}
 		ai.fnAliases = []string{"a0"}
-		fld := cleanseKeyField(agg.AggregateType.Terms.Field)
+		fld := cleanseKeyField(agg.AggregateType.DateHistogram.Field)
 		// TODO Can cast dates to an epoch, then divide by the number of seconds the
 		// interval corresponds to, eg:
 		// SELECT strftime("%s", JSON_EXTRACT(content, '$.Time')) / 1234 as a0  FROM "test-202206" LIMIT 5;
