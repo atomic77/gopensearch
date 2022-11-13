@@ -3,7 +3,9 @@ package server
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
+	"strings"
 )
 
 func (s *Server) HeadHandler(w http.ResponseWriter, r *http.Request) {
@@ -43,4 +45,18 @@ func (s *Server) ClusterStatusHandler(w http.ResponseWriter, r *http.Request) {
 	j, _ := json.Marshal(cs)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(j)
+}
+
+/* Anything we don't have a handler set up for yet */
+func (s *Server) DefaultHandler(w http.ResponseWriter, r *http.Request) {
+
+	println(r.URL.Path)
+	buf := new(strings.Builder)
+	_, err := io.Copy(buf, r.Body)
+	if err == nil {
+		s := buf.String()
+		println(s)
+	}
+	w.WriteHeader(http.StatusNotImplemented)
+	w.Write(nil)
 }

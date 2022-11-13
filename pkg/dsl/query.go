@@ -31,7 +31,7 @@ var (
 type Dsl struct {
 	Query *Query       `"{" ( "query" ":" @@ ","?`
 	Size  *int         `| "size" ":" @Number ","?`
-	Aggs  []*Aggregate `| "aggs" ":" "{" @@* "}" ","?`
+	Aggs  []*Aggregate `| ( "aggs" | "aggregations" ) ":" "{" @@* "}" ","?`
 	Sort  []*Sort      `| "sort" ":" "[" @@* "]" ","?)+ "}"`
 }
 

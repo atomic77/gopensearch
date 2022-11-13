@@ -47,11 +47,20 @@ func (s *Server) registerRoutes() {
 	r.HandleFunc("/{index:[a-zA-Z0-9\\-]+}", s.CreateIndexHandler).Methods("PUT")
 	r.HandleFunc("/{index:[a-zA-Z0-9\\-]+}/_create", s.IndexDocumentHandler).Methods("POST")
 	r.HandleFunc("/{index:[a-zA-Z0-9\\-]+}/_search", s.SearchDocumentHandler).Methods("POST")
+	// FIXME Fix this when adding support for searching over multiple indices
+	r.HandleFunc("/{index:[a-zA-Z0-9\\-]+},{[a-zA-Z0-9\\-]+},{[a-zA-Z0-9\\-]+}/_search", s.SearchDocumentHandler).Methods("POST")
 	r.HandleFunc("/{index:[a-zA-Z0-9\\-]+}/_bulk", s.BulkHandler).Methods("POST")
+	r.HandleFunc("/_bulk", s.BulkHandler).Methods("POST")
 
 	// Administrative functions
 	r.HandleFunc("/", s.HeadHandler).Methods("HEAD")
 	r.HandleFunc("/", s.ClusterStatusHandler).Methods("GET")
+
+	// Template-related
+	r.HandleFunc("/_template/{index:[a-zA-Z0-9\\-]+}", s.CreateTemplateHandler).Methods("PUT")
+
+	r.PathPrefix("/").HandlerFunc(s.DefaultHandler)
+
 	loggedRouter := handlers.LoggingHandler(os.Stdout, r)
 	s.Router = loggedRouter
 }
@@ -305,6 +314,15 @@ func (s *Server) BulkHandler(w http.ResponseWriter, r *http.Request) {
 				bulkResp.Items = append(bulkResp.Items, respWrapped)
 			} else {
 				b, _ := json.Marshal(doc)
+
+				keys2 := make([]string, 0, len(bulkReq))
+				for k := range bulkReq {
+					keys2 = append(keys2, k)
+				}
+				// FIXME Properly parse this structure
+				idxType := bulkReq["index"].(map[string]interface{})
+				index = idxType["_index"].(string)
+
 				s.IndexDocument(string(b), index)
 				resp := BulkResponseItem{
 					Index:       index,

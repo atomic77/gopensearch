@@ -24,6 +24,25 @@ func TestAggTerms(t *testing.T) {
 	repr.Println(q)
 }
 
+func TestAggTermsWithLongName(t *testing.T) {
+	q := &Dsl{}
+	err := DslParser.ParseString("", `
+		{
+			"aggregations":{
+				"distinct_services":{
+					"terms":{
+						"field":"serviceName",
+						"size":10000
+					}
+				}
+			},
+			"size":0
+		}
+    `, q)
+	require.NoError(t, err)
+	repr.Println(q)
+}
+
 func TestAvg(t *testing.T) {
 	q := &Dsl{}
 	err := DslParser.ParseString("", `
