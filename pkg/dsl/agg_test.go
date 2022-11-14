@@ -95,6 +95,27 @@ func TestDateHistogram(t *testing.T) {
 	    "size":0
 	}
     `, q)
-	require.Equal(t, q.Aggs[0].AggregateType.DateHistogram.FixedInterval, "3d")
+	require.Equal(t, q.Aggs[0].AggregateType[0].DateHistogram.FixedInterval, "3d")
+	repr.Println(q)
+}
+
+func TestSubAggregate(t *testing.T) {
+	q := &Dsl{}
+	err := DslParser.ParseString("", `
+	{
+		"size":0,
+		"aggs":{
+			"aggOuter":{
+				"terms": { "field" : "groupField"},
+				"aggregations" : { 
+					"maxTime" : {
+						"max":{"field":"Time"}
+					}
+				}
+			}
+		}
+	}`, q)
+
+	require.NoError(t, err)
 	repr.Println(q)
 }

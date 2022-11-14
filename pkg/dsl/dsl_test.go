@@ -20,6 +20,19 @@ func TestBasic(t *testing.T) {
 	repr.Println(dsl)
 }
 
+func TestBasicMatch(t *testing.T) {
+	dsl := &Dsl{}
+	err := DslParser.ParseString("", `
+	{
+	  "query": {
+		"match": {"foo": "bar"}
+	  },
+	  "size": 1
+    }`, dsl)
+	require.NoError(t, err)
+	repr.Println(dsl)
+}
+
 func TestMultipleTerms(t *testing.T) {
 	dsl := &Dsl{}
 	err := DslParser.ParseString("", `
@@ -32,11 +45,30 @@ func TestMultipleTerms(t *testing.T) {
 	repr.Println(dsl)
 }
 
-func TestNestedBoolMultiple(t *testing.T) {
+func TestNestedBoolArray(t *testing.T) {
 	dsl := &Dsl{}
 	err := DslParser.ParseString("", `
 {
     "query":{"bool":{"must":[{"match":{"foo":"bar"}}]}},
+    "size":1,
+}
+    `, dsl)
+	require.NoError(t, err)
+	repr.Println(dsl)
+}
+
+func TestNestedBoolArrayMultiple(t *testing.T) {
+	dsl := &Dsl{}
+	err := DslParser.ParseString("", `
+{
+    "query":{
+		"bool":{
+			"must":[
+				{"match":{"foo":"bar"}},
+				{"range":{ "fooTime": { "gte": 1654718054570, "lte": "1655322854570", "format":"epoch_millis" }}}
+			]
+		}
+	}
     "size":1,
 }
     `, dsl)
@@ -79,6 +111,27 @@ func TestRange(t *testing.T) {
 			"fooTime": {
 				"gte": 1654718054570,
 				"lte": "1655322854570",
+				"format":"epoch_millis"
+			}
+		}
+	  }
+    }`, q)
+	require.NoError(t, err)
+	repr.Println(q)
+}
+
+func TestRangeWithBooleanParams(t *testing.T) {
+	/* Test parsing deprecated boolean include lower/upper parameters */
+	q := &Dsl{}
+	err := DslParser.ParseString("", `
+	{
+	  "query": {
+		"range":{ 
+			"fooTime": {
+				"gte": 1654718054570,
+				"lte": "1655322854570",
+                "include_lower": true,
+                "include_upper": true,
 				"format":"epoch_millis"
 			}
 		}

@@ -1,8 +1,8 @@
 package dsl
 
 type Aggregate struct {
-	Name          string        `@String ":"`
-	AggregateType AggregateType `"{" @@ "}" ","?`
+	Name          string           `@String ":"`
+	AggregateType []*AggregateType `"{" @@* "}" ","?`
 }
 
 type AggregationCategory int
@@ -20,6 +20,7 @@ type AggregateType struct {
 	Terms             *AggTerms          `( "terms" ":" "{" @@ "}" ","?`
 	DateHistogram     *DateHistogram     `| "date_histogram" ":" "{" @@ "}" ","?`
 	AutoDateHistogram *AutoDateHistogram `| "auto_date_histogram" ":" "{" @@ "}" ","?`
+	Aggs              []*Aggregate       `| ( "aggs" | "aggregations" ) ":" "{" @@* "}" ","?`
 	Avg               *AggField          `| "avg" ":" "{" @@ "}" ","?`
 	Max               *AggField          `| "max" ":" "{" @@ "}" ","? )`
 }

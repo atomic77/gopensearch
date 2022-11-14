@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strings"
 
+	"github.com/alecthomas/repr"
 	"github.com/atomic77/gopensearch/pkg/dsl"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
@@ -182,7 +184,17 @@ func (s *Server) SearchDocumentHandler(w http.ResponseWriter, r *http.Request) {
 	_, err := io.Copy(buf, r.Body)
 
 	q := &dsl.Dsl{}
-	dsl.DslParser.ParseString("", buf.String(), q)
+	err = dsl.DslParser.ParseString("", buf.String(), q)
+
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(err.Error()))
+		return
+	}
+
+	if r.Header.Get("X-Gopensearch-Dsl-Dump") != "" {
+		log.Println(repr.String(q))
+	}
 
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

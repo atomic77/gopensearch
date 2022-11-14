@@ -12,6 +12,7 @@ var (
 	dslLexer = lexer.MustSimple([]lexer.SimpleRule{
 		{"Number", `\d+`},
 		{"String", `"[^"]*"`},
+		{"Boolean", `\w+`},
 		{"Whitespace", `\s+`},
 		{"Punct", `[,.<>(){}=:\[\]]`},
 		{"Comment", `//.*`},
@@ -46,16 +47,16 @@ type Query struct {
 }
 
 type Bool struct {
-	Must   *Must   `( "must" ":" "["? @@ "]"?`
-	Should *Should `| "should" ":" "["? @@ "]"? )`
+	Must   []*Must   `( "must" ":" "["? @@* "]"?`
+	Should []*Should `| "should" ":" "["? @@* "]"? )`
 }
 
 type Must struct {
-	Queries []*Query `@@* ","?`
+	Query *Query `@@ ","?`
 }
 
 type Should struct {
-	Queries []*Query `@@* ","?`
+	Query *Query `@@ ","?`
 }
 
 type Term struct {
@@ -77,7 +78,12 @@ type RangeOptions struct {
 	Lt     *string `| "lt" ":" @( String | Number )","?`
 	Lte    *string `| "lte" ":" @( String | Number )","?`
 	Format *string `| "format" ":" @String ","?`
-	Boost  *string `| "boost" ":" @String )+`
+	// These have been deprecated since version 0.9 (!) but some clients
+	// in the wild still depend on them.
+	// https://github.com/elastic/elasticsearch/issues/48538
+	IncludeLower *bool   `| "include_lower" ":" @Boolean ","?`
+	IncludeUpper *bool   `| "include_upper" ":" @Boolean ","?`
+	Boost        *string `| "boost" ":" @String )+`
 }
 
 // https://www.elastic.co/guide/en/elasticsearch/reference/current/sort-search-results.html

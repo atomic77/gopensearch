@@ -83,6 +83,7 @@ func (s *Server) SearchItem(index string, q *dsl.Dsl) ([]Document, []Aggregation
 func (m *BucketAggregation) SerializeResultset(rows *sql.Rows) {
 	for rows.Next() {
 		b := Bucket{}
+		// TODO Add capability of adding sub-aggregate return values
 		err := rows.Scan(&b.Key, &b.DocCount)
 		if err != nil {
 			panic(err)

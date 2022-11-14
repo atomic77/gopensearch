@@ -70,13 +70,13 @@ func handleBool(b *dsl.Bool) string {
 
 	var sqlFragments []string
 	if b.Must != nil {
-		for _, v := range b.Must.Queries {
-			if v.Match != nil {
-				sqlFragments = append(sqlFragments, handleTermOrMatch(v.Match.Properties))
-			} else if v.Term != nil {
-				sqlFragments = append(sqlFragments, handleTermOrMatch(v.Term.Properties))
-			} else if v.Range != nil {
-				sqlFragments = append(sqlFragments, handleRange(v.Range))
+		for _, v := range b.Must {
+			if v.Query.Match != nil {
+				sqlFragments = append(sqlFragments, handleTermOrMatch(v.Query.Match.Properties))
+			} else if v.Query.Term != nil {
+				sqlFragments = append(sqlFragments, handleTermOrMatch(v.Query.Term.Properties))
+			} else if v.Query.Range != nil {
+				sqlFragments = append(sqlFragments, handleRange(v.Query.Range))
 			}
 		}
 		sqlWhere += strings.Join(sqlFragments, " AND ")
@@ -176,52 +176,61 @@ func genHitsSelect(index string, _q *dsl.Dsl) string {
 }
 
 // Returns the field expression for the select, and the alias for the group by
-func genAggregateSelect(agg *dsl.Aggregate) aggregateInfo {
-	// TODO This will only work with a single aggregation. We'll probably
-	// need to generate two queries to sqlite for each
+func genAggregateSelect(root *dsl.Aggregate) aggregateInfo {
 
 	ai := aggregateInfo{}
 
-	if agg.AggregateType.Terms != nil {
-		ai.groupAliases = []string{"g0"}
-		ai.fnAliases = []string{"a0"}
-		fld := cleanseKeyField(agg.AggregateType.Terms.Field)
-		ai.selectExpr = fmt.Sprintf(
-			` JSON_EXTRACT(content, '$.%s') as %s, COUNT(*) as %s `,
-			fld, ai.groupAliases[0], ai.fnAliases[0],
-		)
+	// TODO Recursively going through sub-aggregations sort of works, but we need to figure out
+	// the best way to properly include grouping and function expressions in the SELECT clause
+	for _, agg := range root.AggregateType {
+		if agg.Terms != nil {
+			ai.groupAliases = []string{"g0"}
+			ai.fnAliases = []string{"a0"}
+			fld := cleanseKeyField(agg.Terms.Field)
+			ai.selectExpr = fmt.Sprintf(
+				` JSON_EXTRACT(content, '$.%s') as %s, COUNT(*) as %s `,
+				fld, ai.groupAliases[0], ai.fnAliases[0],
+			)
 
-		ai.aggregation = &BucketAggregation{}
-	} else if agg.AggregateType.DateHistogram != nil {
-		ai.groupAliases = []string{"g0"}
-		ai.fnAliases = []string{"a0"}
-		fld := cleanseKeyField(agg.AggregateType.DateHistogram.Field)
-		// TODO Can cast dates to an epoch, then divide by the number of seconds the
-		// interval corresponds to, eg:
-		// SELECT strftime("%s", JSON_EXTRACT(content, '$.Time')) / 1234 as a0  FROM "test-202206" LIMIT 5;
-		ai.selectExpr = fmt.Sprintf(
-			` JSON_EXTRACT(content, '$.%s') as %s, COUNT(*) as %s `,
-			fld, ai.groupAliases[0], ai.fnAliases[0],
-		)
+			ai.aggregation = &BucketAggregation{}
+		} else if agg.DateHistogram != nil {
+			ai.groupAliases = []string{"g0"}
+			ai.fnAliases = []string{"a0"}
+			fld := cleanseKeyField(agg.DateHistogram.Field)
+			// TODO Can cast dates to an epoch, then divide by the number of seconds the
+			// interval corresponds to, eg:
+			// SELECT strftime("%s", JSON_EXTRACT(content, '$.Time')) / 1234 as a0  FROM "test-202206" LIMIT 5;
+			ai.selectExpr = fmt.Sprintf(
+				` JSON_EXTRACT(content, '$.%s') as %s, COUNT(*) as %s `,
+				fld, ai.groupAliases[0], ai.fnAliases[0],
+			)
 
-		ai.aggregation = &BucketAggregation{}
-	} else if agg.AggregateType.Avg != nil {
-		ai.fnAliases = []string{"a0"}
-		fld := cleanseKeyField(agg.AggregateType.Avg.Field)
-		ai.selectExpr = fmt.Sprintf(
-			` AVG(JSON_EXTRACT(content, '$.%s')) as %s `,
-			fld, ai.fnAliases[0],
-		)
-		ai.aggregation = &MetricSingleAggregation{}
-	} else if agg.AggregateType.Max != nil {
-		ai.fnAliases = []string{"a0"}
-		fld := cleanseKeyField(agg.AggregateType.Max.Field)
-		ai.selectExpr = fmt.Sprintf(
-			` MAX(JSON_EXTRACT(content, '$.%s')) as %s `,
-			fld, ai.fnAliases[0],
-		)
-		ai.aggregation = &MetricSingleAggregation{}
+			ai.aggregation = &BucketAggregation{}
+		} else if agg.Avg != nil {
+			ai.fnAliases = []string{"a0"}
+			fld := cleanseKeyField(agg.Avg.Field)
+			ai.selectExpr = fmt.Sprintf(
+				` AVG(JSON_EXTRACT(content, '$.%s')) as %s `,
+				fld, ai.fnAliases[0],
+			)
+			ai.aggregation = &MetricSingleAggregation{}
+		} else if agg.Max != nil {
+			ai.fnAliases = []string{"a0"}
+			fld := cleanseKeyField(agg.Max.Field)
+			ai.selectExpr = fmt.Sprintf(
+				` MAX(JSON_EXTRACT(content, '$.%s')) as %s `,
+				fld, ai.fnAliases[0],
+			)
+			ai.aggregation = &MetricSingleAggregation{}
+		} else if agg.Aggs != nil {
+			// TODO Add support for sub-aggregations that would produce a groupby
+			subAi := genAggregateSelect(agg.Aggs[0])
+			if len(subAi.fnAliases) > 0 {
+				ai.selectExpr += fmt.Sprintf(" , %s ", subAi.selectExpr)
+			}
+		}
 	}
+	// FIXME
 	return ai
 }
 

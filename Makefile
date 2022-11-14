@@ -8,7 +8,7 @@ arm:
 	GOARCH=arm64 GOOS=linux go build -o ${BINARY_NAME}-linux-arm64 --tags 'fts5' ./cmd/gopensearch
 
 test:
-	go test -v ./...
+	go test ./...
 
 clean:
 	rm ${BINARY_NAME}-linux
