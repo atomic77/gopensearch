@@ -61,16 +61,16 @@ func (s *Server) SearchItem(index string, q *dsl.Dsl) ([]Document, []Aggregation
 	if err != nil {
 		panic(err)
 	}
-	for _, q := range subQueries {
 
-		log.Println(q.sql)
-		rows, err := s.db.Query(q.sql)
+	for _, q := range subQueries {
+		log.Println(q.sb.String())
+		rows, err := s.db.Query(q.sb.String())
 		if err != nil {
 			return nil, nil, err
 		}
 		defer rows.Close()
 		if q.aggregation != nil {
-			q.aggregation.SerializeResultset(rows)
+			q.aggregation.SerializeResultset(rows, &q)
 			aggs = append(aggs, q.aggregation)
 
 		} else {
@@ -80,10 +80,31 @@ func (s *Server) SearchItem(index string, q *dsl.Dsl) ([]Document, []Aggregation
 	return docs, aggs, nil
 }
 
-func (m *BucketAggregation) SerializeResultset(rows *sql.Rows) {
+func (m *BucketAggregation) getSubAggregates() map[string]interface{} {
+	// TODO Figure out a way of returning all of the sub-aggregates from the
+	// underlying sql statement
+	return nil
+}
+
+func (m *BucketAggregation) SerializeResultset(rows *sql.Rows, dbq *dbSubQuery) {
 	for rows.Next() {
 		b := Bucket{}
-		// TODO Add capability of adding sub-aggregate return values
+
+		/* TODO Add capability of adding sub-aggregate return values. Example from ES:
+				      "buckets": [
+		        {
+		          "key": "15191",
+		          "doc_count": 3844,
+		          "maxTime": {
+		            "value": 1.658960739E12,
+		            "value_as_string": "2022-07-27T22:25:39.000Z"
+		          }
+		        },
+				Perhaps Bucket{} struct needs to include a recursive optional element that can be used to
+				return subaggregations */
+
+		// IMPLEMENT ME Here we'll need to figure out a way to determine how any columns we need to bind
+		// if there are subaggregates as part of the query, and how we'll load them into the Bucket struct
 		err := rows.Scan(&b.Key, &b.DocCount)
 		if err != nil {
 			panic(err)
@@ -92,11 +113,11 @@ func (m *BucketAggregation) SerializeResultset(rows *sql.Rows) {
 	}
 }
 
-func (m *MetricMultipleAggregation) SerializeResultset(rows *sql.Rows) {
+func (m *MetricMultipleAggregation) SerializeResultset(rows *sql.Rows, dbq *dbSubQuery) {
 	// TODO IMPLEMENT ME as with Bucket aggregation
 }
 
-func (m *MetricSingleAggregation) SerializeResultset(rows *sql.Rows) {
+func (m *MetricSingleAggregation) SerializeResultset(rows *sql.Rows, dbq *dbSubQuery) {
 	for rows.Next() {
 		err := rows.Scan(&m.Value)
 		if err != nil {
@@ -108,8 +129,8 @@ func (m *MetricSingleAggregation) SerializeResultset(rows *sql.Rows) {
 func (s *Server) execHitsSubquery(q dbSubQuery) []Document {
 
 	var docs []Document
-	log.Println(q.sql)
-	rows, err := s.db.Query(q.sql)
+	log.Println(q.sb.String())
+	rows, err := s.db.Query(q.sb.String())
 	if err != nil {
 		panic(err)
 	}

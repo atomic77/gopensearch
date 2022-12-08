@@ -138,7 +138,7 @@ type SearchResponse struct {
 
 type Aggregation interface {
 	GetAggregateCategory() dsl.AggregationCategory
-	SerializeResultset(rows *sql.Rows)
+	SerializeResultset(rows *sql.Rows, dbq *dbSubQuery)
 }
 
 type Hits struct {

@@ -12,7 +12,11 @@ require (
 	github.com/alecthomas/repr v0.1.0
 )
 
-require github.com/felixge/httpsnoop v1.0.1 // indirect
+require (
+	github.com/felixge/httpsnoop v1.0.1 // indirect
+	github.com/huandu/go-sqlbuilder v1.17.0 // indirect
+	github.com/huandu/xstrings v1.3.2 // indirect
+)
 
 require (
 	github.com/gorilla/handlers v1.5.1
