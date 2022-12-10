@@ -1,12 +1,12 @@
 package server
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 
 	"github.com/atomic77/gopensearch/pkg/dsl"
+	"github.com/jmoiron/sqlx"
 )
 
 func (s *Server) IndexDocument(doc string, index string) error {
@@ -64,7 +64,7 @@ func (s *Server) SearchItem(index string, q *dsl.Dsl) ([]Document, []Aggregation
 
 	for _, q := range subQueries {
 		log.Println(q.sb.String())
-		rows, err := s.db.Query(q.sb.String())
+		rows, err := s.db.Queryx(q.sb.String())
 		if err != nil {
 			return nil, nil, err
 		}
@@ -86,38 +86,46 @@ func (m *BucketAggregation) getSubAggregates() map[string]interface{} {
 	return nil
 }
 
-func (m *BucketAggregation) SerializeResultset(rows *sql.Rows, dbq *dbSubQuery) {
+func (m *BucketAggregation) SerializeResultset(rows *sqlx.Rows, dbq *dbSubQuery) {
 	for rows.Next() {
-		b := Bucket{}
-
-		/* TODO Add capability of adding sub-aggregate return values. Example from ES:
-				      "buckets": [
-		        {
-		          "key": "15191",
-		          "doc_count": 3844,
-		          "maxTime": {
-		            "value": 1.658960739E12,
-		            "value_as_string": "2022-07-27T22:25:39.000Z"
-		          }
-		        },
-				Perhaps Bucket{} struct needs to include a recursive optional element that can be used to
-				return subaggregations */
-
-		// IMPLEMENT ME Here we'll need to figure out a way to determine how any columns we need to bind
-		// if there are subaggregates as part of the query, and how we'll load them into the Bucket struct
-		err := rows.Scan(&b.Key, &b.DocCount)
+		b := makeBucket()
+		dest := make(map[string]interface{})
+		err := rows.MapScan(dest)
 		if err != nil {
 			panic(err)
+		}
+		// FIXME Assume the first group element is the key we want
+		for k := range dbq.groupAliases {
+			b.Key = dest[k].(string)
+			break
+		}
+
+		// TODO Another hack - just assume the first AggTerms instance we see is
+		// the entry we want to put in the main Buckets{} struct
+		for k, v := range dbq.fnAliases {
+			if _, ok := v.(*dsl.AggTerms); ok {
+				b.DocCount = dest[k].(int64)
+			}
+			if af, ok := v.(*dsl.AggField); ok {
+				// Extract this struct literal out
+				b.subaggregates[af.Field] = struct {
+					Value         int64  `json:"value,omitempty"`
+					ValueAsString string `json:"value_as_string,omitempty"`
+				}{
+					Value:         dest[k].(int64),
+					ValueAsString: "not_yet_implemented",
+				}
+			}
 		}
 		m.Buckets = append(m.Buckets, b)
 	}
 }
 
-func (m *MetricMultipleAggregation) SerializeResultset(rows *sql.Rows, dbq *dbSubQuery) {
+func (m *MetricMultipleAggregation) SerializeResultset(rows *sqlx.Rows, dbq *dbSubQuery) {
 	// TODO IMPLEMENT ME as with Bucket aggregation
 }
 
-func (m *MetricSingleAggregation) SerializeResultset(rows *sql.Rows, dbq *dbSubQuery) {
+func (m *MetricSingleAggregation) SerializeResultset(rows *sqlx.Rows, dbq *dbSubQuery) {
 	for rows.Next() {
 		err := rows.Scan(&m.Value)
 		if err != nil {

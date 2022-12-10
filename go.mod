@@ -16,6 +16,7 @@ require (
 	github.com/felixge/httpsnoop v1.0.1 // indirect
 	github.com/huandu/go-sqlbuilder v1.17.0 // indirect
 	github.com/huandu/xstrings v1.3.2 // indirect
+	github.com/jmoiron/sqlx v1.3.5 // indirect
 )
 
 require (

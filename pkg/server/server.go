@@ -1,7 +1,6 @@
 package server
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +13,7 @@ import (
 	"github.com/atomic77/gopensearch/pkg/dsl"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"github.com/jmoiron/sqlx"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -23,7 +23,7 @@ type Config struct {
 }
 
 type Server struct {
-	db     *sql.DB
+	db     *sqlx.DB
 	Router http.Handler
 	Cfg    Config
 }
@@ -33,8 +33,8 @@ type Document struct {
 	Content map[string]interface{} `json:"_source"`
 }
 
-func openDb(loc string) *sql.DB {
-	d, err := sql.Open("sqlite3", loc)
+func openDb(loc string) *sqlx.DB {
+	d, err := sqlx.Open("sqlite3", loc)
 	if err != nil {
 		panic(err)
 	}
@@ -138,7 +138,7 @@ type SearchResponse struct {
 
 type Aggregation interface {
 	GetAggregateCategory() dsl.AggregationCategory
-	SerializeResultset(rows *sql.Rows, dbq *dbSubQuery)
+	SerializeResultset(rows *sqlx.Rows, dbq *dbSubQuery)
 }
 
 type Hits struct {
@@ -171,9 +171,37 @@ func (m BucketAggregation) GetAggregateCategory() dsl.AggregationCategory {
 }
 
 type Bucket struct {
-	KeyAsString string `json:"key_as_string,omitempty"`
-	Key         string `json:"key"`
-	DocCount    int    `json:"doc_count"`
+	KeyAsString   string `json:"key_as_string,omitempty"`
+	Key           string `json:"key"`
+	DocCount      int64  `json:"doc_count"`
+	subaggregates map[string]interface{}
+}
+
+func (bkt *Bucket) MarshalJSON() ([]byte, error) {
+	// Found this approach here: https://stackoverflow.com/a/59923606
+	// feels like there has to be a better way to optionally tack on some
+	// extra stuff to the JSON we serialize by default...
+	type Bucket_ Bucket
+	b, err := json.Marshal(Bucket_(*bkt))
+	if err != nil {
+		return nil, err
+	}
+	if len(bkt.subaggregates) > 0 {
+		// TODO This is close but not quite there - need to include field/value wrapping
+		s, err := json.Marshal(bkt.subaggregates)
+		if err != nil {
+			return nil, err
+		}
+		b[len(b)-1] = ','
+		b = append(b, s[1:]...)
+	}
+	return b, nil
+}
+
+func makeBucket() Bucket {
+	b := Bucket{}
+	b.subaggregates = make(map[string]interface{})
+	return b
 }
 
 func (s *Server) SearchDocumentHandler(w http.ResponseWriter, r *http.Request) {

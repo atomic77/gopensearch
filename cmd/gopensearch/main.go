@@ -5,19 +5,22 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/alecthomas/repr"
 	"github.com/atomic77/gopensearch/pkg/server"
 )
 
 func main() {
 
+	dbLoc := flag.String("db", "test.db", "Location of sqlite database")
+	flag.Parse()
+
 	s := &server.Server{
 		Cfg: server.Config{
-			DbLocation: "test.db",
+			DbLocation: *dbLoc,
 		},
 	}
 	s.Init()
-	// count := flag.Int("asdf", 5, "count")
-	flag.Parse()
+	log.Println(repr.String(s.Cfg))
 	log.Println("Server started at port 8080")
 	log.Fatal(http.ListenAndServe(":8080", s.Router))
 }

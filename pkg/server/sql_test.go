@@ -208,3 +208,17 @@ func TestWhereBuild(t *testing.T) {
 	sb.Select("col3")
 	repr.Println(sb.String())
 }
+
+func TestStructBuild(t *testing.T) {
+
+	b := Bucket{
+		KeyAsString: "qwerqwer",
+		DocCount:    123,
+		Key:         "key1",
+	}
+	stc := sqlbuilder.NewStruct(b)
+	sb := stc.SelectFrom("footab")
+	repr.Println(stc)
+	repr.Println(sb.String())
+	repr.Println(stc.Addr(&b))
+}

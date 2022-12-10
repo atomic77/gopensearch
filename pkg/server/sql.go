@@ -11,21 +11,20 @@ import (
 )
 
 type dbSubQuery struct {
-	sql          string
 	aggregation  Aggregation
 	aggInfo      *aggregateInfo
 	sb           *sqlbuilder.SelectBuilder
 	selectExprs  []string
-	groupAliases []string
-	fnAliases    []string
+	groupAliases map[string]interface{}
+	fnAliases    map[string]interface{}
 }
 
 func makeDbSubQuery() dbSubQuery {
 	dbq := dbSubQuery{}
 	dbq.sb = sqlbuilder.SQLite.NewSelectBuilder()
 	dbq.selectExprs = make([]string, 0)
-	dbq.groupAliases = make([]string, 0)
-	dbq.fnAliases = make([]string, 0)
+	dbq.groupAliases = make(map[string]interface{})
+	dbq.fnAliases = make(map[string]interface{})
 	return dbq
 }
 
@@ -176,15 +175,13 @@ func (dbq *dbSubQuery) genAggregateSelectExprs(root *dsl.Aggregate) aggregateInf
 
 	ai := makeAggregateInfo()
 
-	// IMPLEMENT ME - Migrate towards chained calls to SelectBuilder to create the aggregate sql here
-	// This may avoid the need to maintain this awkward 'aggregateInfo' struct
 	for _, agg := range root.AggregateType {
 		grpIdx := fmt.Sprintf("g%d", len(dbq.groupAliases)+1)
 		fnIdx := fmt.Sprintf("f%d", len(dbq.fnAliases)+1)
 
 		if agg.Terms != nil {
-			dbq.groupAliases = append(dbq.groupAliases, grpIdx)
-			dbq.fnAliases = append(dbq.fnAliases, fnIdx)
+			dbq.groupAliases[grpIdx] = agg.Terms
+			dbq.fnAliases[fnIdx] = agg.Terms
 			fld := cleanseKeyField(agg.Terms.Field)
 			dbq.selectExprs = append(dbq.selectExprs,
 				dbq.sb.As(fmt.Sprintf(` JSON_EXTRACT(content, '$.%s')`, fld), grpIdx),
@@ -193,8 +190,8 @@ func (dbq *dbSubQuery) genAggregateSelectExprs(root *dsl.Aggregate) aggregateInf
 
 			dbq.aggregation = &BucketAggregation{}
 		} else if agg.DateHistogram != nil {
-			dbq.groupAliases = append(dbq.groupAliases, grpIdx)
-			dbq.fnAliases = append(dbq.fnAliases, fnIdx)
+			dbq.groupAliases[grpIdx] = agg.DateHistogram
+			dbq.fnAliases[fnIdx] = agg.DateHistogram
 			fld := cleanseKeyField(agg.DateHistogram.Field)
 			// TODO Can cast dates to an epoch, then divide by the number of seconds the
 			// interval corresponds to, eg:
@@ -206,14 +203,14 @@ func (dbq *dbSubQuery) genAggregateSelectExprs(root *dsl.Aggregate) aggregateInf
 
 			dbq.aggregation = &BucketAggregation{}
 		} else if agg.Avg != nil {
-			dbq.fnAliases = append(dbq.fnAliases, fnIdx)
+			dbq.fnAliases[fnIdx] = agg.Avg
 			fld := cleanseKeyField(agg.Avg.Field)
 			dbq.selectExprs = append(dbq.selectExprs,
 				dbq.sb.As(fmt.Sprintf(` AVG(JSON_EXTRACT(content, '$.%s')`, fld), fnIdx),
 			)
 			dbq.aggregation = &MetricSingleAggregation{}
 		} else if agg.Max != nil {
-			dbq.fnAliases = append(dbq.fnAliases, fnIdx)
+			dbq.fnAliases[fnIdx] = agg.Max
 			fld := cleanseKeyField(agg.Max.Field)
 			dbq.selectExprs = append(dbq.selectExprs,
 				dbq.sb.As(fmt.Sprintf(` MAX(JSON_EXTRACT(content, '$.%s'))`, fld), fnIdx),
@@ -224,14 +221,6 @@ func (dbq *dbSubQuery) genAggregateSelectExprs(root *dsl.Aggregate) aggregateInf
 			// to a non-nested SQL statement, so we'll "absorb" the first subagg here
 			subAi := dbq.genAggregateSelectExprs(agg.Aggs[0])
 			ai.subAggregateInfo = &subAi
-			/*
-				if len(subAi.fnAliases) > 0 {
-					dbq.fnAliases = append(dbq.fnAliases, subAi.fnAliases...)
-					dbq.sb.Select(
-						dbq.sb.As(fmt.Sprintf(" %s ", subAi.getSelectExpression()),
-					)
-				}
-			*/
 		}
 	}
 	return ai
@@ -246,7 +235,7 @@ func (dbq *dbSubQuery) genLimit(q *dsl.Dsl) {
 }
 
 func (dbq *dbSubQuery) genAggGroupBy(ai aggregateInfo) {
-	for _, v := range dbq.groupAliases {
-		dbq.sb.GroupBy(v)
+	for k := range dbq.groupAliases {
+		dbq.sb.GroupBy(k)
 	}
 }

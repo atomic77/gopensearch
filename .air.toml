@@ -3,8 +3,8 @@ testdata_dir = "testdata"
 tmp_dir = "tmp"
 
 [build]
-  bin = "./tmp/main"
-  cmd = "go build  -gcflags='all=-N -l' --tags 'fts5' -o ./tmp/main ./cmd/gopensearch"
+  bin = "./tmp/gopensearch"
+  cmd = "go build  -gcflags='all=-N -l' --tags 'fts5' -o ./tmp/gopensearch ./cmd/gopensearch"
   delay = 1000
   exclude_dir = ["assets", "tmp", "vendor", "testdata"]
   exclude_file = []
