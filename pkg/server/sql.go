@@ -12,7 +12,6 @@ import (
 
 type dbSubQuery struct {
 	aggregation  Aggregation
-	aggInfo      *aggregateInfo
 	sb           *sqlbuilder.SelectBuilder
 	selectExprs  []string
 	groupAliases map[string]interface{}
@@ -32,27 +31,18 @@ func (dbq *dbSubQuery) isAggregation() bool {
 	return dbq.aggregation == nil
 }
 
-// Not clear if we need both of these
-type aggregateInfo struct {
-	subAggregateInfo *aggregateInfo
-}
-
-func makeAggregateInfo() aggregateInfo {
-	a := aggregateInfo{}
-	return a
-}
 func GenPlan(index string, q *dsl.Dsl) ([]dbSubQuery, error) {
 
 	plan := make([]dbSubQuery, 0)
 
 	for _, a := range q.Aggs {
 		aggQ := makeDbSubQuery()
-		aggInfo := aggQ.genAggregateSelectExprs(a)
+		aggQ.genAggregateSelectExprs(a)
 
 		aggQ.genSelectExpression()
 		aggQ.sb.From(fmt.Sprintf(`"%s"`, index))
 		aggQ.genQueryWherePredicates(q)
-		aggQ.genAggGroupBy(aggInfo)
+		aggQ.genAggGroupBy()
 		plan = append(plan, aggQ)
 	}
 
@@ -127,18 +117,22 @@ func cleanseKeyField(f string) string {
 
 func (dbq *dbSubQuery) handleRange(rng *dsl.Range) error {
 	// Currently only working for date ranges
-	fmtFn := date.DateFormatFn(*rng.RangeOptions.Format)
+	fmtStr := "epoch_millis"
+	if rng.RangeOptions.Format != nil {
+		fmtStr = *rng.RangeOptions.Format
+	}
+	fmtFn := date.DateFormatFn(fmtStr)
 
 	if rng.RangeOptions.Lte != nil {
-		dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s')) <= '%s' `, rng.Field, fmtFn(*rng.RangeOptions.Lte)))
+		dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s'), 'auto') <= '%s' `, rng.Field, fmtFn(*rng.RangeOptions.Lte)))
 	} else if rng.RangeOptions.Lt != nil {
-		dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s')) < '%s' `, rng.Field, fmtFn(*rng.RangeOptions.Lt)))
+		dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s'), 'auto') < '%s' `, rng.Field, fmtFn(*rng.RangeOptions.Lt)))
 	}
 
 	if rng.RangeOptions.Gte != nil {
-		dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s')) >= '%s' `, rng.Field, fmtFn(*rng.RangeOptions.Gte)))
+		dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s'), 'auto') >= '%s' `, rng.Field, fmtFn(*rng.RangeOptions.Gte)))
 	} else if rng.RangeOptions.Gt != nil {
-		dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s')) > '%s' `, rng.Field, fmtFn(*rng.RangeOptions.Gt)))
+		dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s'), 'auto') > '%s' `, rng.Field, fmtFn(*rng.RangeOptions.Gt)))
 	}
 	return nil
 }
@@ -171,13 +165,11 @@ func (dbq *dbSubQuery) genHitsSelect(index string, _q *dsl.Dsl) {
 }
 
 // Returns the field expression for the select, and the alias for the group by
-func (dbq *dbSubQuery) genAggregateSelectExprs(root *dsl.Aggregate) aggregateInfo {
-
-	ai := makeAggregateInfo()
+func (dbq *dbSubQuery) genAggregateSelectExprs(root *dsl.Aggregate) {
 
 	for _, agg := range root.AggregateType {
-		grpIdx := fmt.Sprintf("g%d", len(dbq.groupAliases)+1)
-		fnIdx := fmt.Sprintf("f%d", len(dbq.fnAliases)+1)
+		grpIdx := dbq.getNextGrpAlias()
+		fnIdx := dbq.getNextFnAlias()
 
 		if agg.Terms != nil {
 			dbq.groupAliases[grpIdx] = agg.Terms
@@ -217,13 +209,50 @@ func (dbq *dbSubQuery) genAggregateSelectExprs(root *dsl.Aggregate) aggregateInf
 			)
 			dbq.aggregation = &MetricSingleAggregation{}
 		} else if agg.Aggs != nil {
-			// TODO Currently only support sub-aggregations that can be mapped
-			// to a non-nested SQL statement, so we'll "absorb" the first subagg here
-			subAi := dbq.genAggregateSelectExprs(agg.Aggs[0])
-			ai.subAggregateInfo = &subAi
+			// Experiment with embedding (SELECT) clauses right into the SQL. Sqlite
+			// seems to handle this well
+			for _, subAgg := range agg.Aggs {
+				subQry := makeDbSubQuery()
+				subQry.genAggregateSelectExprs(subAgg)
+				subQry.genSelectExpression()
+				// sqlbuilder always adds to any select statement "FROM" even though
+				// we haven't added any tables, so we have to wrap this in parenthesis manually
+				subSql := subQry.sb.String()
+				subSql = strings.TrimSuffix(subSql, "FROM ")
+				dbq.appendSubQuery(&subQry)
+				dbq.selectExprs = append(dbq.selectExprs,
+					dbq.sb.As(fmt.Sprintf(" (%s) ", subSql), fnIdx),
+				)
+				fnIdx = dbq.getNextFnAlias()
+			}
 		}
 	}
-	return ai
+}
+
+func (dbq *dbSubQuery) getNextGrpAlias() string {
+	return fmt.Sprintf("g%d", len(dbq.groupAliases)+1)
+}
+
+func (dbq *dbSubQuery) getNextFnAlias() string {
+	return fmt.Sprintf("f%d", len(dbq.fnAliases)+1)
+}
+
+func (dbq *dbSubQuery) appendSubQuery(subQry *dbSubQuery) {
+	// Add all the child aliases from a subquery to a parent query
+	fnIdx := len(dbq.fnAliases) + 1
+	grpIdx := len(dbq.groupAliases) + 1
+
+	for _, v := range subQry.fnAliases {
+		k := fmt.Sprintf("f%d", fnIdx)
+		dbq.fnAliases[k] = v
+		fnIdx++
+	}
+
+	for _, v := range subQry.groupAliases {
+		k := fmt.Sprintf("g%d", fnIdx)
+		dbq.groupAliases[k] = v
+		grpIdx++
+	}
 }
 
 func (dbq *dbSubQuery) genLimit(q *dsl.Dsl) {
@@ -234,7 +263,7 @@ func (dbq *dbSubQuery) genLimit(q *dsl.Dsl) {
 	dbq.sb.Limit(l)
 }
 
-func (dbq *dbSubQuery) genAggGroupBy(ai aggregateInfo) {
+func (dbq *dbSubQuery) genAggGroupBy() {
 	for k := range dbq.groupAliases {
 		dbq.sb.GroupBy(k)
 	}

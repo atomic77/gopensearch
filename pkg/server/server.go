@@ -20,6 +20,8 @@ import (
 
 type Config struct {
 	DbLocation string
+	ListenAddr string
+	Port       int
 }
 
 type Server struct {
@@ -187,7 +189,6 @@ func (bkt *Bucket) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 	if len(bkt.subaggregates) > 0 {
-		// TODO This is close but not quite there - need to include field/value wrapping
 		s, err := json.Marshal(bkt.subaggregates)
 		if err != nil {
 			return nil, err

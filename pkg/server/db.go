@@ -96,23 +96,35 @@ func (m *BucketAggregation) SerializeResultset(rows *sqlx.Rows, dbq *dbSubQuery)
 		}
 		// FIXME Assume the first group element is the key we want
 		for k := range dbq.groupAliases {
-			b.Key = dest[k].(string)
+			if v, ok := dest[k].(string); ok {
+				b.Key = v
+			} else {
+				b.Key = ""
+			}
 			break
 		}
 
 		// TODO Another hack - just assume the first AggTerms instance we see is
 		// the entry we want to put in the main Buckets{} struct
+		// All of these type conversions need to be converted into appropriate
+		// interface implementations to clean this up
 		for k, v := range dbq.fnAliases {
 			if _, ok := v.(*dsl.AggTerms); ok {
 				b.DocCount = dest[k].(int64)
 			}
 			if af, ok := v.(*dsl.AggField); ok {
 				// Extract this struct literal out
+				var destVal string
+				if val, ok := dest[k].(string); ok {
+					destVal = val
+				} else if val, ok := dest[k].(int64); ok {
+					destVal = fmt.Sprintf("%d", val)
+				}
 				b.subaggregates[af.Field] = struct {
-					Value         int64  `json:"value,omitempty"`
+					Value         string `json:"value,omitempty"`
 					ValueAsString string `json:"value_as_string,omitempty"`
 				}{
-					Value:         dest[k].(int64),
+					Value:         destVal,
 					ValueAsString: "not_yet_implemented",
 				}
 			}

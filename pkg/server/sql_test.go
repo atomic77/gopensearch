@@ -222,3 +222,14 @@ func TestStructBuild(t *testing.T) {
 	repr.Println(sb.String())
 	repr.Println(stc.Addr(&b))
 }
+
+func TestSubSelectBuild(t *testing.T) {
+	// Looks like we can't avoid the trailing "... FROM" being added
+	//
+
+	subSelect := sqlbuilder.NewSelectBuilder()
+	sb := sqlbuilder.NewSelectBuilder()
+	subSelect.Select("max(c3)")
+	sb.Select("c1", "c2", sb.BuilderAs(subSelect, "f3"))
+	repr.Println(sb.String())
+}

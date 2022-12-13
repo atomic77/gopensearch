@@ -32,7 +32,15 @@ type AggField struct {
 
 type AggTerms struct {
 	Field string `( "field" ":" @String ","?`
-	Size  int    `| "size" ":" @Number ","? )+`
+	Size  int    `| "size" ":" @Number ","? `
+	// FIXME This should support multiple
+	Order *Property `| "order" ":" "[" "{" @@ "}" "]" ","? )+`
+	// Term  *Term  `"{" ( "term" ":" "{" @@ "}"`
+}
+
+type Order struct {
+	Property *Property `@@`
+	// Properties []*Property `@@*`
 }
 
 type DateHistogram struct {

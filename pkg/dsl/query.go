@@ -73,9 +73,9 @@ type Range struct {
 }
 
 type RangeOptions struct {
-	Gt     *string `( "gt" ":" @( String | Number )","?`
+	Gt     *string `( ( "gt" | "from" ) ":" @( String | Number )","?`
 	Gte    *string `| "gte" ":" @( String | Number )","?`
-	Lt     *string `| "lt" ":" @( String | Number )","?`
+	Lt     *string `| ( "lt" | "to" ) ":" @( String | Number )","?`
 	Lte    *string `| "lte" ":" @( String | Number )","?`
 	Format *string `| "format" ":" @String ","?`
 	// These have been deprecated since version 0.9 (!) but some clients
