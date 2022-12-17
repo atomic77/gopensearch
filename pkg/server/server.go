@@ -25,9 +25,10 @@ type Config struct {
 }
 
 type Server struct {
-	db     *sqlx.DB
-	Router http.Handler
-	Cfg    Config
+	db               *sqlx.DB
+	Router           http.Handler
+	Cfg              Config
+	TemplateMappings []TemplateMapping
 }
 
 type Document struct {
@@ -72,6 +73,8 @@ func (s *Server) registerRoutes() {
 func (s *Server) Init() {
 	s.db = openDb(s.Cfg.DbLocation)
 	s.registerRoutes()
+	s.createMetadata()
+	s.loadTemplateMetadata()
 }
 
 type IndexDocumentResponse struct {

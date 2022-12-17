@@ -2,23 +2,27 @@
 
 A lightweight single-process reimplementation of \[elastic|open\]search. Built with golang and sqlite3 as the backend data store, using the `fts5` and `json1` extensions.  
 
-Aims to provide an elasticsearch-compatible implementation in constrained environments like SBCs / raspberry pis, dev-test scenarios and test pipelines. 
+Aims to provide an ES-compatible implementation in constrained environments like SBCs / raspberry pis, dev-test scenarios and test pipelines. 
 
 The full API is massive and most of it is unlikely to be implemented, though I imagine that there are plenty of people out there using only a small subset of its capabilities.
 
 ## Implementation Roadmap
 
-Working:
-* Index and doc creation
+Basic support for:
+* Index and document creation
 * Bulk doc creation
 * Basic support for term/match queries against string fields
-* Bool must/should compound queries crudely supported
+* Templates
+  * Support for mapping date fields using ES format types like `epoch_millis` 
+* Bool must/should compound queries 
 * Multiple single-value aggregates
+* Simple subaggregations
+  * Limited to those that can be easily mapped to a single SQL statement (eg. single metric aggregate coupled with terms)
 
 Near-term goals:
-* Multi-valued and nested-aggregations
+* Enable out-of-box support for [Jaeger](https://github.com/jaegertracing/jaeger/), an OSS application that can use ES as a storage backend
 * Improved test case coverage
-* Improved documentation for what is supported and what isn't, and helpful error messages when unsupported features are used
+* Improved documentation for what is supported and what isn't, and improved error messages when unsupported features are used
 
 Future work:
 * Indexing and storage optimizations in sqlite usage

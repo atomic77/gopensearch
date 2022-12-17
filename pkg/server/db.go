@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/atomic77/gopensearch/pkg/date"
 	"github.com/atomic77/gopensearch/pkg/dsl"
 	"github.com/jmoiron/sqlx"
 )
@@ -14,6 +15,28 @@ func (s *Server) IndexDocument(doc string, index string) error {
 	// document into the doc TEXT blob with the given id
 	// Insert into fts5 index; rowid will be created automatically
 	sql := fmt.Sprintf(` INSERT INTO '%s' (content) VALUES (json(?)) `, index)
+
+	tm := s.findMatchingTemplate(index)
+
+	if tm != nil {
+		docMap := make(map[string]interface{})
+		json.Unmarshal([]byte(doc), &docMap)
+		for fld, prop := range tm.Fields {
+			if dat, ok := docMap[fld]; ok {
+				convDate, err := date.DateFormat(prop.Format, dat)
+				if err != nil {
+					return err
+				}
+				docMap[fld] = convDate
+			}
+		}
+		// Re-marshal the json nwo that we've adjusted it
+		bdoc, err := json.Marshal(docMap)
+		if err != nil {
+			return err
+		}
+		doc = string(bdoc)
+	}
 
 	// How to index specific json columns in sqlite:
 	// https://dgl.cx/2020/06/sqlite-json-support

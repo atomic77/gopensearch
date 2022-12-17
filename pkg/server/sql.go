@@ -118,21 +118,30 @@ func cleanseKeyField(f string) string {
 func (dbq *dbSubQuery) handleRange(rng *dsl.Range) error {
 	// Currently only working for date ranges
 	fmtStr := "epoch_millis"
+	var (
+		dVal *string
+		err  error
+	)
 	if rng.RangeOptions.Format != nil {
 		fmtStr = *rng.RangeOptions.Format
 	}
-	fmtFn := date.DateFormatFn(fmtStr)
-
 	if rng.RangeOptions.Lte != nil {
-		dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s'), 'auto') <= '%s' `, rng.Field, fmtFn(*rng.RangeOptions.Lte)))
+		dVal, err = date.DateFormat(fmtStr, *rng.RangeOptions.Lte)
+		dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s'), 'auto') <= '%s' `, rng.Field, *dVal))
 	} else if rng.RangeOptions.Lt != nil {
-		dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s'), 'auto') < '%s' `, rng.Field, fmtFn(*rng.RangeOptions.Lt)))
+		dVal, err = date.DateFormat(fmtStr, *rng.RangeOptions.Lt)
+		dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s'), 'auto') < '%s' `, rng.Field, *dVal))
+	}
+	if rng.RangeOptions.Gte != nil {
+		dVal, err = date.DateFormat(fmtStr, *rng.RangeOptions.Gte)
+		dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s'), 'auto') >= '%s' `, rng.Field, *dVal))
+	} else if rng.RangeOptions.Gt != nil {
+		dVal, err = date.DateFormat(fmtStr, *rng.RangeOptions.Gt)
+		dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s'), 'auto') > '%s' `, rng.Field, *dVal))
 	}
 
-	if rng.RangeOptions.Gte != nil {
-		dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s'), 'auto') >= '%s' `, rng.Field, fmtFn(*rng.RangeOptions.Gte)))
-	} else if rng.RangeOptions.Gt != nil {
-		dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s'), 'auto') > '%s' `, rng.Field, fmtFn(*rng.RangeOptions.Gt)))
+	if err != nil {
+		return err
 	}
 	return nil
 }
