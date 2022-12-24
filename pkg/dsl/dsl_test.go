@@ -1,111 +1,165 @@
 package dsl
 
 import (
+	"encoding/json"
 	"testing"
 
 	require "github.com/alecthomas/assert/v2"
 	"github.com/alecthomas/repr"
 )
 
-func TestBasic(t *testing.T) {
-	dsl := &Dsl{}
-	err := DslParser.ParseString("", `
-	{
+func TestBasicTerm(t *testing.T) {
+	dsl := &JDsl{}
+	q := `{
 	  "query": {
 		"term": {"foo": "bar"}
 	  },
 	  "size": 1
-    }`, dsl)
+    }`
+	err := json.Unmarshal([]byte(q), &dsl)
 	require.NoError(t, err)
+	// require.Equal(t, dsl.Query.Term.Fields)
+	require.Equal(t, dsl.Query.Term["foo"], "bar")
 	repr.Println(dsl)
 }
 
 func TestBasicMatch(t *testing.T) {
-	dsl := &Dsl{}
-	err := DslParser.ParseString("", `
+	dsl := &JDsl{}
+	q := `
 	{
 	  "query": {
 		"match": {"foo": "bar"}
 	  },
 	  "size": 1
-    }`, dsl)
+    }`
+	err := json.Unmarshal([]byte(q), &dsl)
 	require.NoError(t, err)
+	require.Equal(t, dsl.Query.Match["foo"].Query, "bar")
 	repr.Println(dsl)
 }
 
+func TestVerboseMatch(t *testing.T) {
+	jd1 := JDsl{}
+	jd2 := JDsl{}
+	jShort := `
+	{
+	  "query": {
+		"match": {
+			"foo": "bar"
+		}
+	  },
+	  "size": 1
+    }`
+	jVerb := `
+	{
+	  "query": {
+		"match": {
+			"foo": {
+				"query": "bar",
+				"operator": "OR"
+			}
+		}
+	  },
+	  "size": 1
+    }`
+	err := json.Unmarshal([]byte(jShort), &jd1)
+	require.NoError(t, err)
+	// repr.Println(jd)
+	err = json.Unmarshal([]byte(jVerb), &jd2)
+	require.NoError(t, err)
+	// repr.Println(jd)
+	require.Equal(t, jd1.Query.Match["foo"].Query, "bar")
+	require.Equal(t, jd2.Query.Match["foo"].Query, "bar")
+	require.Equal(t, jd2.Query.Match["foo"].Operator, "OR")
+}
+
 func TestMultipleTerms(t *testing.T) {
-	dsl := &Dsl{}
-	err := DslParser.ParseString("", `
+	dsl := &JDsl{}
+	q := `
 	{
 	  "query": {
 		"term": { "foo": "bar", "oof": "rab" }
 	  }
-    }`, dsl)
+    }`
+	err := json.Unmarshal([]byte(q), &dsl)
 	require.NoError(t, err)
 	repr.Println(dsl)
+	require.Equal(t, dsl.Query.Term["foo"], "bar")
+	require.Equal(t, dsl.Query.Term["oof"], "rab")
 }
 
 func TestNestedBoolArray(t *testing.T) {
-	dsl := &Dsl{}
-	err := DslParser.ParseString("", `
-{
-    "query":{"bool":{"must":[{"match":{"foo":"bar"}}]}},
-    "size":1,
-}
-    `, dsl)
+	dsl := &JDsl{}
+	q := `
+	{
+		"query": {
+			"bool": {
+				"must":[
+					{"match": { "foo" : "bar" } }
+				]
+			}
+		},
+		"size":1
+	} `
+	err := json.Unmarshal([]byte(q), &dsl)
 	require.NoError(t, err)
+	require.Equal(t, dsl.Query.Bool.Must[0].Match["foo"].Query, "bar")
 	repr.Println(dsl)
 }
 
 func TestNestedBoolArrayMultiple(t *testing.T) {
-	dsl := &Dsl{}
-	err := DslParser.ParseString("", `
-{
-    "query":{
-		"bool":{
-			"must":[
-				{"match":{"foo":"bar"}},
-				{"range":{ "fooTime": { "gte": 1654718054570, "lte": "1655322854570", "format":"epoch_millis" }}}
-			]
-		}
-	}
-    "size":1,
-}
-    `, dsl)
+	dsl := &JDsl{}
+	q := `
+	{
+		"query":{
+			"bool":{
+				"must":[
+					{"match":{"foo":"bar"}},
+					{"range":{ "fooTime": { "gte": 1654718054570, "lte": "1655322854570", "format":"epoch_millis" }}}
+				]
+			}
+		},
+		"size":1
+	}`
+	err := json.Unmarshal([]byte(q), &dsl)
 	require.NoError(t, err)
 	repr.Println(dsl)
+	require.Equal(t, dsl.Query.Bool.Must[0].Match["foo"].Query, "bar")
+	require.Equal(t, dsl.Query.Bool.Must[1].Range["fooTime"].Gte.String(), "1654718054570")
 }
 
 func TestNestedBoolSingle(t *testing.T) {
-	dsl := &Dsl{}
-	err := DslParser.ParseString("", `
-{
-    "query":{"bool":{"must":{"match":{"oof":"rab"}}}},
-    "size":1,
-}
-    `, dsl)
+	dsl := &JDsl{}
+	q := `
+	{
+		"query":{"bool":{"must":{"match":{"oof":"rab"}}}},
+		"size":1,
+	}`
+
+	err := json.Unmarshal([]byte(q), &dsl)
 	require.NoError(t, err)
 	repr.Println(dsl)
 }
 
 func TestSort(t *testing.T) {
-	dsl := &Dsl{}
-	err := DslParser.ParseString("", `
+	dsl := &JDsl{}
+	q := `
 	{
 	  "query": {
 		"term": { "foo": "bar", "oof": "rab" }
 	  },
       "sort":[{"asdf":{"order":"desc"}}]
-    }`, dsl)
+    }`
+	err := json.Unmarshal([]byte(q), &dsl)
 	require.NoError(t, err)
+	require.Equal(t, dsl.Sort[0]["asdf"].Order, "desc")
 	repr.Println(dsl)
 }
 
 func TestRange(t *testing.T) {
-	q := &Dsl{}
+	dsl := &JDsl{}
 	// Not sure if this is compliant, but we'll change both of these gte/lte to strings internally
-	err := DslParser.ParseString("", `
-	{
+	q := `{
 	  "query": {
 		"range":{ 
 			"fooTime": {
@@ -115,15 +169,17 @@ func TestRange(t *testing.T) {
 			}
 		}
 	  }
-    }`, q)
+    }`
+	err := json.Unmarshal([]byte(q), &dsl)
 	require.NoError(t, err)
-	repr.Println(q)
+	repr.Println(dsl)
+	require.Equal(t, dsl.Query.Range["fooTime"].Gte.String(), "1654718054570")
 }
 
 func TestRangeWithBooleanParams(t *testing.T) {
 	/* Test parsing deprecated boolean include lower/upper parameters */
-	q := &Dsl{}
-	err := DslParser.ParseString("", `
+	dsl := &JDsl{}
+	q := `
 	{
 	  "query": {
 		"range":{ 
@@ -136,7 +192,8 @@ func TestRangeWithBooleanParams(t *testing.T) {
 			}
 		}
 	  }
-    }`, q)
+    }`
+	err := json.Unmarshal([]byte(q), &dsl)
 	require.NoError(t, err)
-	repr.Println(q)
+	repr.Println(dsl)
 }

@@ -5,6 +5,15 @@ type Aggregate struct {
 	AggregateType []*AggregateType `"{" @@* "}" ","?`
 }
 
+type JAggregate struct {
+	Terms         *JAggTerms      `json:"terms"`
+	DateHistogram *JDateHistogram `json:"date_histogram"`
+	// AutoDateHistogram *AutoDateHistogram `| "auto_date_histogram" ":" "{" @@ "}" ","?`
+	Aggs map[string]JAggregate `json:"aggregations"`
+	Avg  *JAggField            `json:"avg"`
+	Max  *JAggField            `json:"max"`
+}
+
 type AggregationCategory int
 
 const (
@@ -25,9 +34,22 @@ type AggregateType struct {
 	Max               *AggField          `| "max" ":" "{" @@ "}" ","? )`
 }
 
+type JAggField struct {
+	Field   string `json:"field"`
+	Missing string `json:"missing"`
+}
+
 type AggField struct {
 	Field   string `( "field" ":" @String ","?`
 	Missing string `| "missing" ":" @(String | Number) ","? )+`
+}
+
+type JAggTerms struct {
+	Field string `json:"field"`
+	Size  int    `json:"size"`
+	// FIXME This should support multiple
+	// Order *Property `| "order" ":" "[" "{" @@ "}" "]" ","? )+`
+	// Term  *Term  `"{" ( "term" ":" "{" @@ "}"`
 }
 
 type AggTerms struct {
@@ -41,6 +63,13 @@ type AggTerms struct {
 type Order struct {
 	Property *Property `@@`
 	// Properties []*Property `@@*`
+}
+
+type JDateHistogram struct {
+	Field            string `json:"field"`
+	Buckets          int    `json:"buckets"`
+	FixedInterval    string `json:"fixed_interval"`
+	CalendarInterval string `json:"calendar_interval"`
 }
 
 type DateHistogram struct {

@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"encoding/json"
 	"testing"
 
 	require "github.com/alecthomas/assert/v2"
@@ -8,8 +9,8 @@ import (
 )
 
 func TestAggTerms(t *testing.T) {
-	q := &Dsl{}
-	err := DslParser.ParseString("", `
+	dsl := &JDsl{}
+	q := `
 	{
 	    "aggs":{
 	        "generalStatus":{
@@ -18,15 +19,16 @@ func TestAggTerms(t *testing.T) {
 	    },
 	    "size":0,
 		"query": { "term": { "foo": "bar", "oof": "rab" } }
-	}
-    `, q)
+	}`
+	err := json.Unmarshal([]byte(q), &dsl)
+	require.Equal(t, dsl.Aggs["generalStatus"].Terms.Field, "foo")
 	require.NoError(t, err)
-	repr.Println(q)
+	repr.Println(dsl)
 }
 
 func TestAggTermsWithLongName(t *testing.T) {
-	q := &Dsl{}
-	err := DslParser.ParseString("", `
+	dsl := &JDsl{}
+	q := `
 		{
 			"aggregations":{
 				"distinct_services":{
@@ -38,14 +40,16 @@ func TestAggTermsWithLongName(t *testing.T) {
 			},
 			"size":0
 		}
-    `, q)
+    `
+	err := json.Unmarshal([]byte(q), &dsl)
+	require.Equal(t, dsl.Aggs["distinct_services"].Terms, &JAggTerms{Field: "serviceName", Size: 10000})
 	require.NoError(t, err)
-	repr.Println(q)
+	repr.Println(dsl)
 }
 
 func TestAvg(t *testing.T) {
-	q := &Dsl{}
-	err := DslParser.ParseString("", `
+	dsl := &JDsl{}
+	q := `
 	{
 	    "aggs":{
 	        "avgPrice":{
@@ -55,14 +59,16 @@ func TestAvg(t *testing.T) {
 	    "size":0,
 		"query": { "term": { "foo": "bar", "oof": "rab" } }
 	}
-    `, q)
+    `
+	err := json.Unmarshal([]byte(q), &dsl)
+	require.Equal(t, dsl.Aggs["avgPrice"].Avg, &JAggField{Field: "monies"})
 	require.NoError(t, err)
-	repr.Println(q)
+	repr.Println(dsl)
 }
 
 func TestMultipleSingle(t *testing.T) {
-	q := &Dsl{}
-	err := DslParser.ParseString("", `
+	dsl := &JDsl{}
+	q := `
 	{
 	    "aggs":{
 	        "avgPrice":{
@@ -75,14 +81,17 @@ func TestMultipleSingle(t *testing.T) {
 	    "size":0,
 		"query": { "term": { "foo": "bar", "oof": "rab" } }
 	}
-    `, q)
+    `
+	err := json.Unmarshal([]byte(q), &dsl)
 	require.NoError(t, err)
-	repr.Println(q)
+	repr.Println(dsl)
+	require.Equal(t, dsl.Aggs["avgPrice"].Avg, &JAggField{Field: "monies"})
+	require.Equal(t, dsl.Aggs["maxPrice"].Max, &JAggField{Field: "monies"})
 }
 
 func TestDateHistogram(t *testing.T) {
-	q := &Dsl{}
-	DslParser.ParseString("", `
+	dsl := &JDsl{}
+	q := `
 	{
 	    "aggs":{
 	        "datecounts":{
@@ -93,15 +102,18 @@ func TestDateHistogram(t *testing.T) {
 			}
 	    },
 	    "size":0
-	}
-    `, q)
-	require.Equal(t, q.Aggs[0].AggregateType[0].DateHistogram.FixedInterval, "3d")
-	repr.Println(q)
+	}`
+	err := json.Unmarshal([]byte(q), &dsl)
+	repr.Println(dsl)
+	require.NoError(t, err)
+	require.Equal(t, dsl.Aggs["datecounts"].DateHistogram,
+		&JDateHistogram{Field: "datefld", FixedInterval: "3d"},
+	)
 }
 
 func TestSubAggregate(t *testing.T) {
-	q := &Dsl{}
-	err := DslParser.ParseString("", `
+	dsl := &JDsl{}
+	q := `
 	{
 		"size":0,
 		"aggs":{
@@ -114,8 +126,11 @@ func TestSubAggregate(t *testing.T) {
 				}
 			}
 		}
-	}`, q)
+	}`
 
+	err := json.Unmarshal([]byte(q), &dsl)
+	repr.Println(dsl)
 	require.NoError(t, err)
-	repr.Println(q)
+	require.Equal(t, dsl.Aggs["aggOuter"].Terms.Field, "groupField")
+	require.Equal(t, dsl.Aggs["aggOuter"].Aggs["maxTime"].Max.Field, "Time")
 }
