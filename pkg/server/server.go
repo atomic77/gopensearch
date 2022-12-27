@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,24 +17,6 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 )
-
-type Config struct {
-	DbLocation string
-	ListenAddr string
-	Port       int
-}
-
-type Server struct {
-	db               *sqlx.DB
-	Router           http.Handler
-	Cfg              Config
-	TemplateMappings []TemplateMapping
-}
-
-type Document struct {
-	Id      int                    `json:"id"`
-	Content map[string]interface{} `json:"_source"`
-}
 
 func openDb(loc string) *sqlx.DB {
 	d, err := sqlx.Open("sqlite3", loc)
@@ -56,6 +39,9 @@ func (s *Server) registerRoutes() {
 	r.HandleFunc("/{index:[a-zA-Z0-9\\-]+}/_bulk", s.BulkHandler).Methods("POST")
 	r.HandleFunc("/_bulk", s.BulkHandler).Methods("POST")
 
+	r.HandleFunc("/{index:[a-zA-Z0-9\\-]+}/_msearch", s.MSearchHandler).Methods("GET")
+	r.HandleFunc("/_msearch", s.MSearchHandler).Methods("GET")
+
 	// Administrative functions
 	r.HandleFunc("/", s.HeadHandler).Methods("HEAD")
 	r.HandleFunc("/", s.ClusterStatusHandler).Methods("GET")
@@ -74,15 +60,6 @@ func (s *Server) Init() {
 	s.registerRoutes()
 	s.createMetadata()
 	s.loadTemplateMetadata()
-}
-
-type IndexDocumentResponse struct {
-	// TODO Add shards:
-	// https://www.elastic.co/guide/en/elasticsearch/reference/current/docs-index_.html#create-document-ids-automatically
-	Index   string `json:"_index"`
-	Id      int    `json:"_id"`
-	Version int    `json:"_version"`
-	Result  string `json:"result"`
 }
 
 func (s *Server) IndexDocumentHandler(w http.ResponseWriter, r *http.Request) {
@@ -108,12 +85,6 @@ func (s *Server) IndexDocumentHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(j)
 }
 
-type CreateIndexResponse struct {
-	Acknowledged       bool   `json:"acknowledged"`
-	ShardsAcknowledged bool   `json:"shards_acknowledged"`
-	Index              string `json:"index"`
-}
-
 func (s *Server) CreateIndexHandler(w http.ResponseWriter, r *http.Request) {
 	// PUT /<index>  - creates a new index
 	vars := mux.Vars(r)
@@ -132,53 +103,16 @@ func (s *Server) CreateIndexHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(j)
 }
 
-type SearchResponse struct {
-	Took         int                    `json:"took"`
-	TimedOut     bool                   `json:"timed_out"`
-	Shards       ShardsInfo             `json:"_shards"`
-	Hits         *Hits                  `json:"hits"`
-	Aggregations map[string]Aggregation `json:"aggregations,omitempty"`
-}
-
-type Aggregation interface {
-	GetAggregateCategory() dsl.AggregationCategory
-	SerializeResultset(rows *sqlx.Rows, dbq *dbSubQuery)
-}
-
-type Hits struct {
-	Total int        `json:"total"`
-	Hits  []Document `json:"hits"`
-}
-type MetricSingleAggregation struct {
-	Value float64 `json:"value"`
-}
-
 func (m MetricSingleAggregation) GetAggregateCategory() dsl.AggregationCategory {
 	return dsl.MetricsSingle
-}
-
-type MetricMultipleAggregation struct {
-	Values []float64 `json:"values"`
 }
 
 func (m MetricMultipleAggregation) GetAggregateCategory() dsl.AggregationCategory {
 	return dsl.MetricsMultiple
 }
 
-type BucketAggregation struct {
-	DocCountErrorUpperBound int      `json:"doc_count_error_upper_bound"`
-	Buckets                 []Bucket `json:"buckets"`
-}
-
 func (m BucketAggregation) GetAggregateCategory() dsl.AggregationCategory {
 	return dsl.Bucket
-}
-
-type Bucket struct {
-	KeyAsString   string `json:"key_as_string,omitempty"`
-	Key           string `json:"key"`
-	DocCount      int64  `json:"doc_count"`
-	subaggregates map[string]interface{}
 }
 
 func (bkt *Bucket) MarshalJSON() ([]byte, error) {
@@ -199,12 +133,6 @@ func (bkt *Bucket) MarshalJSON() ([]byte, error) {
 		b = append(b, s[1:]...)
 	}
 	return b, nil
-}
-
-func makeBucket() Bucket {
-	b := Bucket{}
-	b.subaggregates = make(map[string]interface{})
-	return b
 }
 
 func (s *Server) SearchDocumentHandler(w http.ResponseWriter, r *http.Request) {
@@ -232,7 +160,7 @@ func (s *Server) SearchDocumentHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	docs, aggs, err := s.SearchItem(index, q)
+	sr, err := s.getSearchResponse(index, q)
 	if err != nil {
 		eresp := &GenericErrorResponse{
 			Reason:       err.Error(),
@@ -245,6 +173,16 @@ func (s *Server) SearchDocumentHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		w.Write(j)
 		return
+	}
+	j, _ := json.Marshal(sr)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(j)
+}
+
+func (s *Server) getSearchResponse(index string, q *dsl.Dsl) (*SearchResponse, error) {
+	docs, aggs, err := s.SearchItem(index, q)
+	if err != nil {
+		return nil, err
 	}
 	sr := &SearchResponse{
 		Took:     123,
@@ -259,40 +197,7 @@ func (s *Server) SearchDocumentHandler(w http.ResponseWriter, r *http.Request) {
 	for label, agg := range aggs {
 		sr.Aggregations[label] = agg
 	}
-	j, _ := json.Marshal(sr)
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(j)
-}
-
-type ShardsInfo struct {
-	Total      int `json:"total"`
-	Successful int `json:"successful"`
-	Failed     int `json:"failed"`
-}
-
-func MakeShardsInfo() ShardsInfo {
-	s := ShardsInfo{Total: 1, Successful: 1, Failed: 1}
-	return s
-}
-
-// Not fully implemented
-type BulkResponseItem struct {
-	Index       string     `json:"_index"`
-	Id          string     `json:"_id"`
-	Type        string     `json:"_type"`
-	Version     int        `json:"_version"`
-	Result      string     `json:"result"`
-	SeqNo       int        `json:"_seq_no"`
-	Status      int        `json:"status"`
-	PrimaryTerm int        `json:"_primary_term"`
-	Shards      ShardsInfo `json:"_shards"`
-	// Error       map[string]string `json:"error"`
-}
-
-type BulkResponse struct {
-	Took   int                           `json:"took"`
-	Errors bool                          `json:"errors"`
-	Items  []map[string]BulkResponseItem `json:"items"`
+	return sr, nil
 }
 
 /*
@@ -391,6 +296,79 @@ func (s *Server) BulkHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	bulkResp.Errors = false
 	j, _ := json.Marshal(bulkResp)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(j)
+}
+
+// Similar to bulk handler, but for querying
+// https://www.elastic.co/guide/en/elasticsearch/reference/7.17/search-multi-search.html
+func (s *Server) MSearchHandler(w http.ResponseWriter, r *http.Request) {
+
+	vars := mux.Vars(r)
+	index := vars["index"]
+
+	msearchHeader := MSearchHeader{}
+
+	// Read everything even though we could stream it, since we
+	// want to be able to dump the entire body in case of an error
+	b, _ := io.ReadAll(r.Body)
+	// decoder := json.NewDecoder(r.Body)
+	rdr := bytes.NewReader(b)
+	decoder := json.NewDecoder(rdr)
+	decoder.DisallowUnknownFields()
+	responses := make([]*SearchResponse, 0)
+
+	for {
+
+		// MSearch requests come in the form of a "header" request, a new line,
+		// and the standard search query
+		err := decoder.Decode(&msearchHeader)
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			log.Println("error: ", err.Error(), "Complete body: ", string(b))
+			fmt.Fprintf(w, "failure trying to parse "+err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		qDsl := &dsl.Dsl{}
+		err = decoder.Decode(&qDsl)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintln(w, "failure parsing DSL ", err.Error())
+			return
+		}
+
+		var sr *SearchResponse
+		if msearchHeader.Index != nil {
+			sr, err = s.getSearchResponse(*msearchHeader.Index, qDsl)
+		} else if msearchHeader.Indices != nil {
+			// TODO Search only the first for now until we can enable search
+			// support against multiple indices seamlessly
+			sr, err = s.getSearchResponse(*msearchHeader.Indices[0], qDsl)
+
+		} else {
+			sr, err = s.getSearchResponse(index, qDsl)
+		}
+
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			fmt.Fprintln(w, "failure when searching ", err.Error())
+			return
+		}
+
+		responses = append(responses, sr)
+
+	}
+	msr := MSearchResponse{
+		Took:      123,
+		Responses: responses,
+	}
+	j, _ := json.Marshal(msr)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(j)
 }

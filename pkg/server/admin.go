@@ -4,6 +4,7 @@ package server
 import (
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -50,12 +51,12 @@ func (s *Server) ClusterStatusHandler(w http.ResponseWriter, r *http.Request) {
 /* Anything we don't have a handler set up for yet */
 func (s *Server) DefaultHandler(w http.ResponseWriter, r *http.Request) {
 
-	println(r.URL.Path)
+	log.Println(`Unsupported query URL: `, r.URL.Path)
 	buf := new(strings.Builder)
 	_, err := io.Copy(buf, r.Body)
 	if err == nil {
 		s := buf.String()
-		println(s)
+		log.Println("Body: ", s)
 	}
 	w.WriteHeader(http.StatusNotImplemented)
 	w.Write(nil)

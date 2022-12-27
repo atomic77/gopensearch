@@ -64,3 +64,29 @@ func (jd *Dsl) UnmarshalJSON(b []byte) error {
 
 	return nil
 }
+
+func (bl *Bool) UnmarshalJSON(b []byte) error {
+	type Bool_ Bool
+	var base Bool_
+	var err error
+
+	if err = json.Unmarshal(b, &base); err != nil {
+		return err
+	}
+	m1 := Query{}
+	m2 := make([]Query, 0)
+
+	// Must can be provided with a single object or an array
+	err = json.Unmarshal(base.RawMust, &m1)
+	if err == nil {
+		bl.Must = append(bl.Must, m1)
+		return nil
+	}
+
+	err = json.Unmarshal(base.RawMust, &m2)
+	if err == nil {
+		bl.Must = m2
+	}
+
+	return err
+}

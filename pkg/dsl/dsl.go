@@ -46,7 +46,8 @@ type Match struct {
 
 type Bool struct {
 	// RawMust json.RawMessage `json:"must"`
-	Must []Query `json:"must"`
+	RawMust json.RawMessage `json:"must"`
+	Must    []Query
 	// Should []*Should `| "should" ":" "["? @@* "]"? )`
 }
 
