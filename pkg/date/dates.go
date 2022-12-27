@@ -1,6 +1,7 @@
 package date
 
 import (
+	"encoding/json"
 	"strconv"
 	"time"
 )
@@ -55,6 +56,12 @@ func DateFormat(fmt string, v interface{}) (*string, error) {
 		return dateFormatFloat(fmt, d)
 	case string:
 		return dateFormatString(fmt, d)
+	case json.Number:
+		i, err := d.Int64()
+		if err != nil {
+			return nil, err
+		}
+		return dateFormatInt(fmt, i)
 	default:
 		return nil, nil
 	}

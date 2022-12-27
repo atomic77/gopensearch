@@ -74,39 +74,33 @@ where json_extract(ftidx.content, '$.a') = 123
 and ftidx MATCH 'earth';
 
 */
-func (s *Server) SearchItem(index string, q *dsl.Dsl) ([]Document, []Aggregation, error) {
+func (s *Server) SearchItem(index string, q *dsl.Dsl) ([]Document, map[string]Aggregation, error) {
 	var (
-		aggs []Aggregation
+		aggs map[string]Aggregation
 		docs []Document
 	)
-
+	aggs = make(map[string]Aggregation, 0)
 	subQueries, err := GenPlan(index, q)
 	if err != nil {
 		panic(err)
 	}
 
-	for _, q := range subQueries {
-		log.Println(q.sb.String())
-		rows, err := s.db.Queryx(q.sb.String())
+	for _, subq := range subQueries {
+		log.Println(subq.sb.String())
+		rows, err := s.db.Queryx(subq.sb.String())
 		if err != nil {
 			return nil, nil, err
 		}
 		defer rows.Close()
-		if q.aggregation != nil {
-			q.aggregation.SerializeResultset(rows, &q)
-			aggs = append(aggs, q.aggregation)
+		if subq.isAggregation() {
+			subq.aggregation.SerializeResultset(rows, &subq)
+			aggs[*subq.label] = subq.aggregation
 
 		} else {
-			docs = s.execHitsSubquery(q)
+			docs = s.execHitsSubquery(subq)
 		}
 	}
 	return docs, aggs, nil
-}
-
-func (m *BucketAggregation) getSubAggregates() map[string]interface{} {
-	// TODO Figure out a way of returning all of the sub-aggregates from the
-	// underlying sql statement
-	return nil
 }
 
 func (m *BucketAggregation) SerializeResultset(rows *sqlx.Rows, dbq *dbSubQuery) {

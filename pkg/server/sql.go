@@ -16,6 +16,7 @@ type dbSubQuery struct {
 	selectExprs  []string
 	groupAliases map[string]interface{}
 	fnAliases    map[string]interface{}
+	label        *string
 }
 
 func makeDbSubQuery() dbSubQuery {
@@ -28,16 +29,17 @@ func makeDbSubQuery() dbSubQuery {
 }
 
 func (dbq *dbSubQuery) isAggregation() bool {
-	return dbq.aggregation == nil
+	return dbq.aggregation != nil
 }
 
 func GenPlan(index string, q *dsl.Dsl) ([]dbSubQuery, error) {
 
 	plan := make([]dbSubQuery, 0)
 
-	for _, a := range q.Aggs {
+	for label, a := range q.Aggs {
 		aggQ := makeDbSubQuery()
-		aggQ.genAggregateSelectExprs(a)
+		aggQ.label = &label
+		aggQ.genAggregateSelectExprs(&a)
 
 		aggQ.genSelectExpression()
 		aggQ.sb.From(fmt.Sprintf(`"%s"`, index))
@@ -67,9 +69,9 @@ func (dbq *dbSubQuery) genQueryWherePredicates(q *dsl.Dsl) error {
 	if q.Query.Bool != nil {
 		dbq.handleBool(q.Query.Bool)
 	} else if q.Query.Term != nil {
-		dbq.handleTermOrMatch(q.Query.Term.Properties)
+		dbq.handleTerm(q.Query.Term)
 	} else if q.Query.Match != nil {
-		dbq.handleTermOrMatch(q.Query.Match.Properties)
+		dbq.handleMatch(q.Query.Match)
 	} else if q.Query.Range != nil {
 		dbq.handleRange(q.Query.Range)
 	}
@@ -80,12 +82,12 @@ func (dbq *dbSubQuery) genQueryWherePredicates(q *dsl.Dsl) error {
 func (dbq *dbSubQuery) handleBool(b *dsl.Bool) error {
 	if b.Must != nil {
 		for _, v := range b.Must {
-			if v.Query.Match != nil {
-				dbq.handleTermOrMatch(v.Query.Match.Properties)
-			} else if v.Query.Term != nil {
-				dbq.handleTermOrMatch(v.Query.Term.Properties)
-			} else if v.Query.Range != nil {
-				dbq.handleRange(v.Query.Range)
+			if v.Match != nil {
+				dbq.handleMatch(v.Match)
+			} else if v.Term != nil {
+				dbq.handleTerm(v.Term)
+			} else if v.Range != nil {
+				dbq.handleRange(v.Range)
 			}
 		}
 	}
@@ -93,16 +95,32 @@ func (dbq *dbSubQuery) handleBool(b *dsl.Bool) error {
 	return nil
 }
 
-// Treat Term and Match as interchangeable for now
-func (dbq *dbSubQuery) handleTermOrMatch(props []*dsl.Property) error {
-	for _, prop := range props {
-		key := cleanseKeyField(prop.Key)
-		iVal, err := strconv.ParseInt(prop.Value, 10, 64)
+func (dbq *dbSubQuery) handleMatch(matches map[string]dsl.Match) error {
+	// TODO This is just a glorified terms query now - need to add support for
+	// other match functionality
+	for _key, val := range matches {
+		key := cleanseKeyField(_key)
+		iVal, err := strconv.ParseInt(val.Query, 10, 64)
 		if err == nil {
 			// Interpret this as an integer
 			dbq.sb.Where(fmt.Sprintf(` JSON_EXTRACT(content, '$.%s') = %d `, key, iVal))
 		} else {
-			dbq.sb.Where(fmt.Sprintf(` JSON_EXTRACT(content, '$.%s') = '%s' `, key, prop.Value))
+			dbq.sb.Where(fmt.Sprintf(` JSON_EXTRACT(content, '$.%s') = '%s' `, key, val.Query))
+		}
+	}
+
+	return nil
+}
+
+func (dbq *dbSubQuery) handleTerm(terms map[string]string) error {
+	for _key, val := range terms {
+		key := cleanseKeyField(_key)
+		iVal, err := strconv.ParseInt(val, 10, 64)
+		if err == nil {
+			// Interpret this as an integer
+			dbq.sb.Where(fmt.Sprintf(` JSON_EXTRACT(content, '$.%s') = %d `, key, iVal))
+		} else {
+			dbq.sb.Where(fmt.Sprintf(` JSON_EXTRACT(content, '$.%s') = '%s' `, key, val))
 		}
 	}
 
@@ -115,49 +133,53 @@ func cleanseKeyField(f string) string {
 	return key
 }
 
-func (dbq *dbSubQuery) handleRange(rng *dsl.Range) error {
+func (dbq *dbSubQuery) handleRange(rngFlds map[string]dsl.Range) error {
 	// Currently only working for date ranges
 	fmtStr := "epoch_millis"
 	var (
 		dVal *string
 		err  error
 	)
-	if rng.RangeOptions.Format != nil {
-		fmtStr = *rng.RangeOptions.Format
-	}
-	if rng.RangeOptions.Lte != nil {
-		dVal, err = date.DateFormat(fmtStr, *rng.RangeOptions.Lte)
-		dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s'), 'auto') <= '%s' `, rng.Field, *dVal))
-	} else if rng.RangeOptions.Lt != nil {
-		dVal, err = date.DateFormat(fmtStr, *rng.RangeOptions.Lt)
-		dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s'), 'auto') < '%s' `, rng.Field, *dVal))
-	}
-	if rng.RangeOptions.Gte != nil {
-		dVal, err = date.DateFormat(fmtStr, *rng.RangeOptions.Gte)
-		dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s'), 'auto') >= '%s' `, rng.Field, *dVal))
-	} else if rng.RangeOptions.Gt != nil {
-		dVal, err = date.DateFormat(fmtStr, *rng.RangeOptions.Gt)
-		dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s'), 'auto') > '%s' `, rng.Field, *dVal))
-	}
+	for fld, rng := range rngFlds {
+		if rng.Format != nil {
+			fmtStr = *rng.Format
+		}
+		if rng.Lte != nil {
+			dVal, err = date.DateFormat(fmtStr, *rng.Lte)
+			dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s'), 'auto') <= '%s' `, fld, *dVal))
+		} else if rng.Lt != nil {
+			dVal, err = date.DateFormat(fmtStr, *rng.Lt)
+			dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s'), 'auto') < '%s' `, fld, *dVal))
+		}
+		if rng.Gte != nil {
+			dVal, err = date.DateFormat(fmtStr, *rng.Gte)
+			dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s'), 'auto') >= '%s' `, fld, *dVal))
+		} else if rng.Gt != nil {
+			dVal, err = date.DateFormat(fmtStr, *rng.Gt)
+			dbq.sb.Where(fmt.Sprintf(` DATETIME(JSON_EXTRACT(content, '$.%s'), 'auto') > '%s' `, fld, *dVal))
+		}
 
-	if err != nil {
-		return err
+		if err != nil {
+			return err
+		}
+		break
 	}
 	return nil
 }
 
-func (dbq *dbSubQuery) genSort(sortFields []*dsl.Sort) {
+func (dbq *dbSubQuery) genSort(sortFields []map[string]dsl.Sort) {
 
 	if len(sortFields) == 0 {
 		return
 	}
 
-	for _, v := range sortFields {
-		dbq.sb.OrderBy(fmt.Sprintf(
-			` JSON_EXTRACT(content, '$.%s') %s `,
-			v.Field,
-			strings.ToUpper(v.SortOrder.Order),
-		))
+	for _, m := range sortFields {
+		for k, v := range m {
+			dbq.sb.OrderBy(fmt.Sprintf(
+				` JSON_EXTRACT(content, '$.%s') %s `,
+				k, strings.ToUpper(v.Order),
+			))
+		}
 	}
 }
 
@@ -174,66 +196,67 @@ func (dbq *dbSubQuery) genHitsSelect(index string, _q *dsl.Dsl) {
 }
 
 // Returns the field expression for the select, and the alias for the group by
-func (dbq *dbSubQuery) genAggregateSelectExprs(root *dsl.Aggregate) {
+func (dbq *dbSubQuery) genAggregateSelectExprs(agg *dsl.Aggregate) {
 
-	for _, agg := range root.AggregateType {
-		grpIdx := dbq.getNextGrpAlias()
-		fnIdx := dbq.getNextFnAlias()
+	// for _, agg := range root.Aggs {
+	grpIdx := dbq.getNextGrpAlias()
+	fnIdx := dbq.getNextFnAlias()
 
-		if agg.Terms != nil {
-			dbq.groupAliases[grpIdx] = agg.Terms
-			dbq.fnAliases[fnIdx] = agg.Terms
-			fld := cleanseKeyField(agg.Terms.Field)
-			dbq.selectExprs = append(dbq.selectExprs,
-				dbq.sb.As(fmt.Sprintf(` JSON_EXTRACT(content, '$.%s')`, fld), grpIdx),
-				dbq.sb.As("COUNT(*)", fnIdx),
-			)
+	if agg.Terms != nil {
+		dbq.groupAliases[grpIdx] = agg.Terms
+		dbq.fnAliases[fnIdx] = agg.Terms
+		fld := cleanseKeyField(agg.Terms.Field)
+		dbq.selectExprs = append(dbq.selectExprs,
+			dbq.sb.As(fmt.Sprintf(` JSON_EXTRACT(content, '$.%s')`, fld), grpIdx),
+			dbq.sb.As("COUNT(*)", fnIdx),
+		)
 
-			dbq.aggregation = &BucketAggregation{}
-		} else if agg.DateHistogram != nil {
-			dbq.groupAliases[grpIdx] = agg.DateHistogram
-			dbq.fnAliases[fnIdx] = agg.DateHistogram
-			fld := cleanseKeyField(agg.DateHistogram.Field)
-			// TODO Can cast dates to an epoch, then divide by the number of seconds the
-			// interval corresponds to, eg:
-			// SELECT strftime("%s", JSON_EXTRACT(content, '$.Time')) / 1234 as a0  FROM "test-202206" LIMIT 5;
-			dbq.selectExprs = append(dbq.selectExprs,
-				dbq.sb.As(fmt.Sprintf(` JSON_EXTRACT(content, '$.%s')`, fld), grpIdx),
-				dbq.sb.As("COUNT(*)", fnIdx),
-			)
+		dbq.aggregation = &BucketAggregation{}
+	} else if agg.DateHistogram != nil {
+		dbq.groupAliases[grpIdx] = agg.DateHistogram
+		dbq.fnAliases[fnIdx] = agg.DateHistogram
+		fld := cleanseKeyField(agg.DateHistogram.Field)
+		// TODO Can cast dates to an epoch, then divide by the number of seconds the
+		// interval corresponds to, eg:
+		// SELECT strftime("%s", JSON_EXTRACT(content, '$.Time')) / 1234 as a0  FROM "test-202206" LIMIT 5;
+		dbq.selectExprs = append(dbq.selectExprs,
+			dbq.sb.As(fmt.Sprintf(` JSON_EXTRACT(content, '$.%s')`, fld), grpIdx),
+			dbq.sb.As("COUNT(*)", fnIdx),
+		)
 
-			dbq.aggregation = &BucketAggregation{}
-		} else if agg.Avg != nil {
-			dbq.fnAliases[fnIdx] = agg.Avg
-			fld := cleanseKeyField(agg.Avg.Field)
+		dbq.aggregation = &BucketAggregation{}
+	} else if agg.Avg != nil {
+		dbq.fnAliases[fnIdx] = agg.Avg
+		fld := cleanseKeyField(agg.Avg.Field)
+		dbq.selectExprs = append(dbq.selectExprs,
+			dbq.sb.As(fmt.Sprintf(` AVG(JSON_EXTRACT(content, '$.%s')`, fld), fnIdx),
+		)
+		dbq.aggregation = &MetricSingleAggregation{}
+	} else if agg.Max != nil {
+		dbq.fnAliases[fnIdx] = agg.Max
+		fld := cleanseKeyField(agg.Max.Field)
+		dbq.selectExprs = append(dbq.selectExprs,
+			dbq.sb.As(fmt.Sprintf(` MAX(JSON_EXTRACT(content, '$.%s'))`, fld), fnIdx),
+		)
+		dbq.aggregation = &MetricSingleAggregation{}
+	}
+	if agg.Aggs != nil {
+		// Experiment with embedding (SELECT) clauses right into the SQL. Sqlite
+		// seems to handle this well
+		for label, subAgg := range agg.Aggs {
+			subQry := makeDbSubQuery()
+			subQry.label = &label
+			subQry.genAggregateSelectExprs(&subAgg)
+			subQry.genSelectExpression()
+			// sqlbuilder always adds to any select statement "FROM" even though
+			// we haven't added any tables, so we have to wrap this in parenthesis manually
+			subSql := subQry.sb.String()
+			subSql = strings.TrimSuffix(subSql, "FROM ")
+			fnIdx = dbq.getNextFnAlias()
+			dbq.appendSubQuery(&subQry)
 			dbq.selectExprs = append(dbq.selectExprs,
-				dbq.sb.As(fmt.Sprintf(` AVG(JSON_EXTRACT(content, '$.%s')`, fld), fnIdx),
+				dbq.sb.As(fmt.Sprintf(" (%s) ", subSql), fnIdx),
 			)
-			dbq.aggregation = &MetricSingleAggregation{}
-		} else if agg.Max != nil {
-			dbq.fnAliases[fnIdx] = agg.Max
-			fld := cleanseKeyField(agg.Max.Field)
-			dbq.selectExprs = append(dbq.selectExprs,
-				dbq.sb.As(fmt.Sprintf(` MAX(JSON_EXTRACT(content, '$.%s'))`, fld), fnIdx),
-			)
-			dbq.aggregation = &MetricSingleAggregation{}
-		} else if agg.Aggs != nil {
-			// Experiment with embedding (SELECT) clauses right into the SQL. Sqlite
-			// seems to handle this well
-			for _, subAgg := range agg.Aggs {
-				subQry := makeDbSubQuery()
-				subQry.genAggregateSelectExprs(subAgg)
-				subQry.genSelectExpression()
-				// sqlbuilder always adds to any select statement "FROM" even though
-				// we haven't added any tables, so we have to wrap this in parenthesis manually
-				subSql := subQry.sb.String()
-				subSql = strings.TrimSuffix(subSql, "FROM ")
-				dbq.appendSubQuery(&subQry)
-				dbq.selectExprs = append(dbq.selectExprs,
-					dbq.sb.As(fmt.Sprintf(" (%s) ", subSql), fnIdx),
-				)
-				fnIdx = dbq.getNextFnAlias()
-			}
 		}
 	}
 }

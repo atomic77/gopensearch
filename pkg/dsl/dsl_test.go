@@ -9,7 +9,7 @@ import (
 )
 
 func TestBasicTerm(t *testing.T) {
-	dsl := &JDsl{}
+	dsl := &Dsl{}
 	q := `{
 	  "query": {
 		"term": {"foo": "bar"}
@@ -24,7 +24,7 @@ func TestBasicTerm(t *testing.T) {
 }
 
 func TestBasicMatch(t *testing.T) {
-	dsl := &JDsl{}
+	dsl := &Dsl{}
 	q := `
 	{
 	  "query": {
@@ -39,8 +39,8 @@ func TestBasicMatch(t *testing.T) {
 }
 
 func TestVerboseMatch(t *testing.T) {
-	jd1 := JDsl{}
-	jd2 := JDsl{}
+	jd1 := Dsl{}
+	jd2 := Dsl{}
 	jShort := `
 	{
 	  "query": {
@@ -74,7 +74,7 @@ func TestVerboseMatch(t *testing.T) {
 }
 
 func TestMultipleTerms(t *testing.T) {
-	dsl := &JDsl{}
+	dsl := &Dsl{}
 	q := `
 	{
 	  "query": {
@@ -89,7 +89,7 @@ func TestMultipleTerms(t *testing.T) {
 }
 
 func TestNestedBoolArray(t *testing.T) {
-	dsl := &JDsl{}
+	dsl := &Dsl{}
 	q := `
 	{
 		"query": {
@@ -108,7 +108,7 @@ func TestNestedBoolArray(t *testing.T) {
 }
 
 func TestNestedBoolArrayMultiple(t *testing.T) {
-	dsl := &JDsl{}
+	dsl := &Dsl{}
 	q := `
 	{
 		"query":{
@@ -129,7 +129,7 @@ func TestNestedBoolArrayMultiple(t *testing.T) {
 }
 
 func TestNestedBoolSingle(t *testing.T) {
-	dsl := &JDsl{}
+	dsl := &Dsl{}
 	q := `
 	{
 		"query":{"bool":{"must":{"match":{"oof":"rab"}}}},
@@ -142,7 +142,7 @@ func TestNestedBoolSingle(t *testing.T) {
 }
 
 func TestSort(t *testing.T) {
-	dsl := &JDsl{}
+	dsl := &Dsl{}
 	q := `
 	{
 	  "query": {
@@ -157,7 +157,7 @@ func TestSort(t *testing.T) {
 }
 
 func TestRange(t *testing.T) {
-	dsl := &JDsl{}
+	dsl := &Dsl{}
 	// Not sure if this is compliant, but we'll change both of these gte/lte to strings internally
 	q := `{
 	  "query": {
@@ -178,7 +178,7 @@ func TestRange(t *testing.T) {
 
 func TestRangeWithBooleanParams(t *testing.T) {
 	/* Test parsing deprecated boolean include lower/upper parameters */
-	dsl := &JDsl{}
+	dsl := &Dsl{}
 	q := `
 	{
 	  "query": {

@@ -7,7 +7,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 
 	"github.com/alecthomas/repr"
 	"github.com/atomic77/gopensearch/pkg/dsl"
@@ -212,11 +211,10 @@ func (s *Server) SearchDocumentHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	index := vars["index"]
 
-	buf := new(strings.Builder)
-	_, err := io.Copy(buf, r.Body)
-
+	buf, _ := io.ReadAll(r.Body)
 	q := &dsl.Dsl{}
-	err = dsl.DslParser.ParseString("", buf.String(), q)
+	// err = dsl.DslParser.ParseString("", buf.String(), q)
+	err := json.Unmarshal(buf, &q)
 
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -258,8 +256,8 @@ func (s *Server) SearchDocumentHandler(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 	sr.Aggregations = make(map[string]Aggregation)
-	for i, a := range q.Aggs {
-		sr.Aggregations[a.Name] = aggs[i]
+	for label, agg := range aggs {
+		sr.Aggregations[label] = agg
 	}
 	j, _ := json.Marshal(sr)
 	w.Header().Set("Content-Type", "application/json")

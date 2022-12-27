@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"testing"
 
 	require "github.com/alecthomas/assert/v2"
@@ -11,16 +12,16 @@ import (
 
 func TestBasic(t *testing.T) {
 
-	q := &dsl.Dsl{}
-	err := dsl.DslParser.ParseString("", `
-	{
+	d := &dsl.Dsl{}
+	q := `{
 	  "query": {
 		"term": {"foo": "bar"}
 	  },
 	  "size": 1
-    }`, q)
+    }`
+	err := json.Unmarshal([]byte(q), &d)
 	require.NoError(t, err)
-	plan, err2 := GenPlan("testindex", q)
+	plan, err2 := GenPlan("testindex", d)
 	if len(plan) != 1 {
 		t.Error("Expected only one query in plan")
 	}
@@ -30,16 +31,17 @@ func TestBasic(t *testing.T) {
 
 func TestBool(t *testing.T) {
 
-	q := &dsl.Dsl{}
-	err := dsl.DslParser.ParseString("", `
+	d := &dsl.Dsl{}
+	q := `
 	{
       "query":{
 		"bool":{"must":[{"term":{"foo":"bar"}}]}
 	  },
 	  "size": 1
-    }`, q)
+    }`
+	err := json.Unmarshal([]byte(q), &d)
 	require.NoError(t, err)
-	plan, err2 := GenPlan("testindex", q)
+	plan, err2 := GenPlan("testindex", d)
 	require.NoError(t, err2)
 	if len(plan) != 1 {
 		t.Error("Expected only one query in plan")
@@ -49,16 +51,17 @@ func TestBool(t *testing.T) {
 }
 
 func TestSort(t *testing.T) {
-	q := &dsl.Dsl{}
-	err := dsl.DslParser.ParseString("", `
+	d := &dsl.Dsl{}
+	q := `
 	{
 	  "query": {
 		"term": { "foo": "bar", "oof": "rab" }
 	  },
 	  "sort":[{"asdf":{"order":"desc"}}]
-    }`, q)
+    }`
+	err := json.Unmarshal([]byte(q), &d)
 	require.NoError(t, err)
-	plan, err2 := GenPlan("testindex", q)
+	plan, err2 := GenPlan("testindex", d)
 	if len(plan) != 1 {
 		t.Error("Expected only one query in plan")
 	}
@@ -68,8 +71,8 @@ func TestSort(t *testing.T) {
 }
 
 func TestRange(t *testing.T) {
-	q := &dsl.Dsl{}
-	err := dsl.DslParser.ParseString("", `
+	d := &dsl.Dsl{}
+	q := `
 	{
 	  "query": {
 		"range":{ 
@@ -80,9 +83,10 @@ func TestRange(t *testing.T) {
 			}
 		}
 	  }
-    }`, q)
+    }`
+	err := json.Unmarshal([]byte(q), &d)
 	require.NoError(t, err)
-	plan, err2 := GenPlan("testindex", q)
+	plan, err2 := GenPlan("testindex", d)
 	if len(plan) != 1 {
 		t.Error("Expected only one query in plan")
 	}
@@ -92,8 +96,8 @@ func TestRange(t *testing.T) {
 }
 
 func TestAggTerms(t *testing.T) {
-	q := &dsl.Dsl{}
-	err := dsl.DslParser.ParseString("", `
+	d := &dsl.Dsl{}
+	q := `
 	{
 	    "aggs":{
 	        "generalStatus":{
@@ -103,15 +107,14 @@ func TestAggTerms(t *testing.T) {
 	    "size":5,
 		"query": { "term": { "foo": "bar", "oof": "rab" } }
 	}
-    `, q)
+    `
+	err := json.Unmarshal([]byte(q), &d)
 	require.NoError(t, err)
-	plan, err2 := GenPlan("testindex", q)
+	plan, err2 := GenPlan("testindex", d)
 	if len(plan) != 2 {
 		t.Error("Expected two queries in plan")
 	}
-	// if plan[0].aggregation == nil && plan[0].aggregation.GetAggregateCategory() == dsl.MetricsSingle {
-	// 	t.Error("Expected an aggregation query first")
-	// }
+
 	require.NoError(t, err2)
 	repr.Println(plan)
 	repr.Println(plan[0].sb.String())
@@ -119,8 +122,8 @@ func TestAggTerms(t *testing.T) {
 }
 
 func TestDateHistogram(t *testing.T) {
-	q := &dsl.Dsl{}
-	err := dsl.DslParser.ParseString("", `
+	d := &dsl.Dsl{}
+	q := `
 	{
 	    "aggs":{
 			"dates": {
@@ -132,9 +135,10 @@ func TestDateHistogram(t *testing.T) {
 	    },
 	    "size":0
 	}
-    `, q)
+    `
+	err := json.Unmarshal([]byte(q), &d)
 	require.NoError(t, err)
-	plan, err2 := GenPlan("testindex", q)
+	plan, err2 := GenPlan("testindex", d)
 	if len(plan) != 3 {
 		t.Error("Expected 3 queries in plan")
 	}
@@ -146,8 +150,8 @@ func TestDateHistogram(t *testing.T) {
 }
 
 func TestSubAggregate(t *testing.T) {
-	q := &dsl.Dsl{}
-	err := dsl.DslParser.ParseString("", `
+	d := &dsl.Dsl{}
+	q := `
 	{
 		"aggregations": {
 			"traceIDs": {
@@ -166,10 +170,11 @@ func TestSubAggregate(t *testing.T) {
 		},
 		"size": 0
 	}
-    `, q)
+    `
 
+	err := json.Unmarshal([]byte(q), &d)
 	require.NoError(t, err)
-	plan, err2 := GenPlan("testindex", q)
+	plan, err2 := GenPlan("testindex", d)
 
 	// if !strings.Contains(plan[1].sb.String(), "f1") {
 	// 	t.Error("Did not find a second function statement")

@@ -9,7 +9,7 @@ import (
 )
 
 func TestAggTerms(t *testing.T) {
-	dsl := &JDsl{}
+	dsl := &Dsl{}
 	q := `
 	{
 	    "aggs":{
@@ -27,7 +27,7 @@ func TestAggTerms(t *testing.T) {
 }
 
 func TestAggTermsWithLongName(t *testing.T) {
-	dsl := &JDsl{}
+	dsl := &Dsl{}
 	q := `
 		{
 			"aggregations":{
@@ -42,13 +42,13 @@ func TestAggTermsWithLongName(t *testing.T) {
 		}
     `
 	err := json.Unmarshal([]byte(q), &dsl)
-	require.Equal(t, dsl.Aggs["distinct_services"].Terms, &JAggTerms{Field: "serviceName", Size: 10000})
+	require.Equal(t, dsl.Aggs["distinct_services"].Terms, &AggTerms{Field: "serviceName", Size: 10000})
 	require.NoError(t, err)
 	repr.Println(dsl)
 }
 
 func TestAvg(t *testing.T) {
-	dsl := &JDsl{}
+	dsl := &Dsl{}
 	q := `
 	{
 	    "aggs":{
@@ -61,13 +61,13 @@ func TestAvg(t *testing.T) {
 	}
     `
 	err := json.Unmarshal([]byte(q), &dsl)
-	require.Equal(t, dsl.Aggs["avgPrice"].Avg, &JAggField{Field: "monies"})
+	require.Equal(t, dsl.Aggs["avgPrice"].Avg, &AggField{Field: "monies"})
 	require.NoError(t, err)
 	repr.Println(dsl)
 }
 
 func TestMultipleSingle(t *testing.T) {
-	dsl := &JDsl{}
+	dsl := &Dsl{}
 	q := `
 	{
 	    "aggs":{
@@ -78,19 +78,18 @@ func TestMultipleSingle(t *testing.T) {
 	            "max":{"field":"monies"}
 			}
 	    },
-	    "size":0,
 		"query": { "term": { "foo": "bar", "oof": "rab" } }
 	}
     `
 	err := json.Unmarshal([]byte(q), &dsl)
 	require.NoError(t, err)
 	repr.Println(dsl)
-	require.Equal(t, dsl.Aggs["avgPrice"].Avg, &JAggField{Field: "monies"})
-	require.Equal(t, dsl.Aggs["maxPrice"].Max, &JAggField{Field: "monies"})
+	require.Equal(t, dsl.Aggs["avgPrice"].Avg, &AggField{Field: "monies"})
+	require.Equal(t, dsl.Aggs["maxPrice"].Max, &AggField{Field: "monies"})
 }
 
 func TestDateHistogram(t *testing.T) {
-	dsl := &JDsl{}
+	dsl := &Dsl{}
 	q := `
 	{
 	    "aggs":{
@@ -107,12 +106,12 @@ func TestDateHistogram(t *testing.T) {
 	repr.Println(dsl)
 	require.NoError(t, err)
 	require.Equal(t, dsl.Aggs["datecounts"].DateHistogram,
-		&JDateHistogram{Field: "datefld", FixedInterval: "3d"},
+		&DateHistogram{Field: "datefld", FixedInterval: "3d"},
 	)
 }
 
 func TestSubAggregate(t *testing.T) {
-	dsl := &JDsl{}
+	dsl := &Dsl{}
 	q := `
 	{
 		"size":0,

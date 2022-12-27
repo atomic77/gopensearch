@@ -1,17 +1,12 @@
 package dsl
 
 type Aggregate struct {
-	Name          string           `@String ":"`
-	AggregateType []*AggregateType `"{" @@* "}" ","?`
-}
-
-type JAggregate struct {
-	Terms         *JAggTerms      `json:"terms"`
-	DateHistogram *JDateHistogram `json:"date_histogram"`
+	Terms         *AggTerms      `json:"terms"`
+	DateHistogram *DateHistogram `json:"date_histogram"`
 	// AutoDateHistogram *AutoDateHistogram `| "auto_date_histogram" ":" "{" @@ "}" ","?`
-	Aggs map[string]JAggregate `json:"aggregations"`
-	Avg  *JAggField            `json:"avg"`
-	Max  *JAggField            `json:"max"`
+	Aggs map[string]Aggregate `json:"aggregations"`
+	Avg  *AggField            `json:"avg"`
+	Max  *AggField            `json:"max"`
 }
 
 type AggregationCategory int
@@ -23,28 +18,12 @@ const (
 	Pipeline
 )
 
-type AggregateType struct {
-	// https://www.elastic.co/guide/en/elasticsearch/reference/7.17/search-aggregations.html
-	// Many to be implemented...
-	Terms             *AggTerms          `( "terms" ":" "{" @@ "}" ","?`
-	DateHistogram     *DateHistogram     `| "date_histogram" ":" "{" @@ "}" ","?`
-	AutoDateHistogram *AutoDateHistogram `| "auto_date_histogram" ":" "{" @@ "}" ","?`
-	Aggs              []*Aggregate       `| ( "aggs" | "aggregations" ) ":" "{" @@* "}" ","?`
-	Avg               *AggField          `| "avg" ":" "{" @@ "}" ","?`
-	Max               *AggField          `| "max" ":" "{" @@ "}" ","? )`
-}
-
-type JAggField struct {
+type AggField struct {
 	Field   string `json:"field"`
 	Missing string `json:"missing"`
 }
 
-type AggField struct {
-	Field   string `( "field" ":" @String ","?`
-	Missing string `| "missing" ":" @(String | Number) ","? )+`
-}
-
-type JAggTerms struct {
+type AggTerms struct {
 	Field string `json:"field"`
 	Size  int    `json:"size"`
 	// FIXME This should support multiple
@@ -52,40 +31,22 @@ type JAggTerms struct {
 	// Term  *Term  `"{" ( "term" ":" "{" @@ "}"`
 }
 
-type AggTerms struct {
-	Field string `( "field" ":" @String ","?`
-	Size  int    `| "size" ":" @Number ","? `
-	// FIXME This should support multiple
-	Order *Property `| "order" ":" "[" "{" @@ "}" "]" ","? )+`
-	// Term  *Term  `"{" ( "term" ":" "{" @@ "}"`
-}
-
-type Order struct {
-	Property *Property `@@`
-	// Properties []*Property `@@*`
-}
-
-type JDateHistogram struct {
+type DateHistogram struct {
 	Field            string `json:"field"`
 	Buckets          int    `json:"buckets"`
 	FixedInterval    string `json:"fixed_interval"`
 	CalendarInterval string `json:"calendar_interval"`
 }
 
-type DateHistogram struct {
-	Field            string `( "field" ":" @String ","?`
-	Buckets          int    `| "buckets" ":" @Number ","?`
-	FixedInterval    string `| "fixed_interval" ":" @String ","?`
-	CalendarInterval string `| "calendar_interval" ":" @String ","? )+`
-}
-
+/* TODO Implement
 type AutoDateHistogram struct {
 	Field           string `( "field" ":" @String ","?`
 	Buckets         int    `| "buckets" ":" @Number ","?`
 	MinimumInterval string `| "buckets" ":" @String ","? )+`
 }
+*/
 
-func (a *AggregateType) GenAggregationCategory() AggregationCategory {
+func (a *Aggregate) GenAggregationCategory() AggregationCategory {
 	// There must be a better way to do this... ?
 
 	if a.Avg != nil ||
