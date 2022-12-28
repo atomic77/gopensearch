@@ -112,15 +112,15 @@ func (dbq *dbSubQuery) handleMatch(matches map[string]dsl.Match) error {
 	return nil
 }
 
-func (dbq *dbSubQuery) handleTerm(terms map[string]string) error {
+func (dbq *dbSubQuery) handleTerm(terms map[string]dsl.Term) error {
 	for _key, val := range terms {
 		key := cleanseKeyField(_key)
-		iVal, err := strconv.ParseInt(val, 10, 64)
+		iVal, err := strconv.ParseInt(val.Value, 10, 64)
 		if err == nil {
 			// Interpret this as an integer
 			dbq.sb.Where(fmt.Sprintf(` JSON_EXTRACT(content, '$.%s') = %d `, key, iVal))
 		} else {
-			dbq.sb.Where(fmt.Sprintf(` JSON_EXTRACT(content, '$.%s') = '%s' `, key, val))
+			dbq.sb.Where(fmt.Sprintf(` JSON_EXTRACT(content, '$.%s') = '%s' `, key, val.Value))
 		}
 	}
 

@@ -10,10 +10,6 @@ import (
 // https://www.elastic.co/guide/en/elasticsearch/reference/current/search-search.html#search-search-api-example
 // https://www.elastic.co/guide/en/elasticsearch/reference/7.17/query-dsl-match-query.html
 
-type Term struct {
-	Fields map[string]string
-}
-
 type Dsl struct {
 	Query *Query `json:"query"`
 	Size  *int   `json:"size"`
@@ -33,11 +29,18 @@ type Query struct {
 	// TODO This also needs to be able to handle shorthand forms
 	// that can provide additional properties like boost:
 	// https://www.elastic.co/guide/en/elasticsearch/reference/7.17/query-dsl-term-query.html
-	Term  map[string]string `json:"term"`
-	Bool  *Bool             `json:"bool"`
-	Range map[string]Range  `json:"range"`
+	RawTerm map[string]interface{} `json:"term"`
+	Term    map[string]Term
+
+	Bool  *Bool            `json:"bool"`
+	Range map[string]Range `json:"range"`
 }
 
+type Term struct {
+	Value           string   `json:"value"`
+	Boost           *float64 `json:"fuzziness"`
+	CaseInsensitive bool     `json:"operator"`
+}
 type Match struct {
 	Query     string `json:"query"`
 	Fuzziness string `json:"fuzziness"`
@@ -46,9 +49,10 @@ type Match struct {
 
 type Bool struct {
 	// RawMust json.RawMessage `json:"must"`
-	RawMust json.RawMessage `json:"must"`
-	Must    []Query
-	// Should []*Should `| "should" ":" "["? @@* "]"? )`
+	RawMust   json.RawMessage `json:"must"`
+	Must      []Query
+	RawShould json.RawMessage `json:"should"`
+	Should    []Query
 }
 
 type Range struct {

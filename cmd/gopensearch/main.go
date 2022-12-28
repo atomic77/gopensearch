@@ -15,6 +15,7 @@ func main() {
 	dbLoc := flag.String("db", "test.db", "Location of sqlite database")
 	port := flag.Int("port", 8080, "Port to listen on")
 	listenAddr := flag.String("listenAddr", "0.0.0.0", "Address to listen on")
+	debug := flag.Bool("debug", false, "Whether to produce more debugging output")
 	flag.Parse()
 
 	s := &server.Server{
@@ -22,6 +23,7 @@ func main() {
 			DbLocation: *dbLoc,
 			ListenAddr: *listenAddr,
 			Port:       *port,
+			Debug:      *debug,
 		},
 	}
 	s.Init()

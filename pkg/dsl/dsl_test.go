@@ -19,7 +19,7 @@ func TestBasicTerm(t *testing.T) {
 	err := json.Unmarshal([]byte(q), &dsl)
 	require.NoError(t, err)
 	// require.Equal(t, dsl.Query.Term.Fields)
-	require.Equal(t, dsl.Query.Term["foo"], "bar")
+	require.Equal(t, dsl.Query.Term["foo"].Value, "bar")
 	repr.Println(dsl)
 }
 
@@ -84,8 +84,8 @@ func TestMultipleTerms(t *testing.T) {
 	err := json.Unmarshal([]byte(q), &dsl)
 	require.NoError(t, err)
 	repr.Println(dsl)
-	require.Equal(t, dsl.Query.Term["foo"], "bar")
-	require.Equal(t, dsl.Query.Term["oof"], "rab")
+	require.Equal(t, dsl.Query.Term["foo"].Value, "bar")
+	require.Equal(t, dsl.Query.Term["oof"].Value, "rab")
 }
 
 func TestNestedBoolArray(t *testing.T) {
@@ -154,6 +154,29 @@ func TestNestedBoolTermSingle(t *testing.T) {
 	// TODO Add support for search_after / terminate_after
 	// , "search_after": [ 1672152391201000 ],
 	// "terminate_after": 10000
+	err := json.Unmarshal([]byte(q), &dsl)
+	require.NoError(t, err)
+	repr.Println(dsl)
+}
+
+func TestDoubleNestedBool(t *testing.T) {
+
+	dsl := &Dsl{}
+	q := `{
+	"query": {
+		"bool": { "must": {
+				"bool": { "should": [
+						{ "term": { "traceID": { "boost": 2, "value": "0e63d6f89e6091ac" } } },
+						{ "term": { "traceID": "e63d6f89e6091ac" } }
+					]
+				}
+		}}
+	},
+	"size": 10000,
+	"sort": [ { "startTime": { "order": "asc" } } ]
+	}`
+	// "terminate_after": 10000
+	// "search_after": [ 1672113600000000 ],
 	err := json.Unmarshal([]byte(q), &dsl)
 	require.NoError(t, err)
 	repr.Println(dsl)

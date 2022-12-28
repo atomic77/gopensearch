@@ -50,6 +50,9 @@ func (s *Server) registerRoutes() {
 	r.HandleFunc("/_template/{index:[a-zA-Z0-9\\-]+}", s.CreateTemplateHandler).Methods("PUT")
 
 	r.PathPrefix("/").HandlerFunc(s.DefaultHandler)
+	if s.Cfg.Debug {
+		r.Use(debugMiddleware)
+	}
 
 	loggedRouter := handlers.LoggingHandler(os.Stdout, r)
 	s.Router = loggedRouter
@@ -60,6 +63,18 @@ func (s *Server) Init() {
 	s.registerRoutes()
 	s.createMetadata()
 	s.loadTemplateMetadata()
+}
+
+func debugMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		b, _ := io.ReadAll(r.Body)
+		log.Println("Request", r.RequestURI)
+		log.Println("Complete body: ", string(b))
+		rdr := bytes.NewBuffer(b)
+		r.Body = io.NopCloser(rdr)
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) IndexDocumentHandler(w http.ResponseWriter, r *http.Request) {
@@ -309,12 +324,7 @@ func (s *Server) MSearchHandler(w http.ResponseWriter, r *http.Request) {
 
 	msearchHeader := MSearchHeader{}
 
-	// Read everything even though we could stream it, since we
-	// want to be able to dump the entire body in case of an error
-	b, _ := io.ReadAll(r.Body)
-	// decoder := json.NewDecoder(r.Body)
-	rdr := bytes.NewReader(b)
-	decoder := json.NewDecoder(rdr)
+	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	responses := make([]*SearchResponse, 0)
 
@@ -329,7 +339,6 @@ func (s *Server) MSearchHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err != nil {
-			log.Println("error: ", err.Error(), "Complete body: ", string(b))
 			fmt.Fprintf(w, "failure trying to parse "+err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			return

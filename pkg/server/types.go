@@ -11,6 +11,7 @@ type Config struct {
 	DbLocation string
 	ListenAddr string
 	Port       int
+	Debug      bool
 }
 
 type Server struct {
