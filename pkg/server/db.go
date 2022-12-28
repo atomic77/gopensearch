@@ -18,24 +18,13 @@ func (s *Server) IndexDocument(doc string, index string) error {
 
 	tm := s.findMatchingTemplate(index)
 
+	var err error
+	d := &doc
 	if tm != nil {
-		docMap := make(map[string]interface{})
-		json.Unmarshal([]byte(doc), &docMap)
-		for fld, prop := range tm.Fields {
-			if dat, ok := docMap[fld]; ok {
-				convDate, err := date.DateFormat(prop.Format, dat)
-				if err != nil {
-					return err
-				}
-				docMap[fld] = convDate
-			}
-		}
-		// Re-marshal the json nwo that we've adjusted it
-		bdoc, err := json.Marshal(docMap)
+		d, err = templateMapDoc(doc, tm)
 		if err != nil {
 			return err
 		}
-		doc = string(bdoc)
 	}
 
 	// How to index specific json columns in sqlite:
@@ -50,7 +39,7 @@ func (s *Server) IndexDocument(doc string, index string) error {
 	}
 	defer stmt.Close()
 
-	_, err2 := stmt.Exec(doc)
+	_, err2 := stmt.Exec(*d)
 	return err2
 }
 
@@ -97,7 +86,7 @@ func (s *Server) SearchItem(index string, q *dsl.Dsl) ([]Document, map[string]Ag
 			aggs[*subq.label] = subq.aggregation
 
 		} else {
-			docs = s.execHitsSubquery(subq)
+			docs = s.execHitsSubquery(index, subq)
 		}
 	}
 	return docs, aggs, nil
@@ -163,25 +152,87 @@ func (m *MetricSingleAggregation) SerializeResultset(rows *sqlx.Rows, dbq *dbSub
 	}
 }
 
-func (s *Server) execHitsSubquery(q dbSubQuery) []Document {
+func (s *Server) execHitsSubquery(index string, q dbSubQuery) []Document {
 
 	var docs []Document
-	log.Println(q.sb.String())
+	if s.Cfg.Debug {
+		log.Println(q.sb.String())
+	}
 	rows, err := s.db.Query(q.sb.String())
 	if err != nil {
 		panic(err)
 	}
 	defer rows.Close()
 
+	tm := s.findMatchingTemplate(index)
+
 	for rows.Next() {
 		doc := Document{}
 		var s string
 		err2 := rows.Scan(&doc.Id, &s)
-		json.Unmarshal([]byte(s), &doc.Content)
 		if err2 != nil {
-			panic(err2)
+			return nil
 		}
+
+		newDoc, err := unMarshalDoc(s, tm)
+		if err != nil {
+			return nil
+		}
+		doc.Content = newDoc
 		docs = append(docs, doc)
 	}
 	return docs
+}
+
+// Unmarshal raw string from sqlite and transform representation to
+// match template mapping
+func unMarshalDoc(sdata string, tm *TemplateMapping) (map[string]interface{}, error) {
+
+	docMap := make(map[string]interface{})
+	err := json.Unmarshal([]byte(sdata), &docMap)
+	if err != nil {
+		return nil, err
+	}
+
+	if tm == nil {
+		return docMap, nil
+	}
+
+	for fld, prop := range tm.Fields {
+		if dat, ok := docMap[fld]; ok {
+			convDate, err := date.AsDateFormat(prop.Format, dat.(string))
+			if err != nil {
+				return nil, err
+			}
+			docMap[fld] = convDate
+		}
+	}
+	return docMap, nil
+}
+
+// Marshal document to sqlite storage representation (used only for dates right now)
+func templateMapDoc(sdata string, tm *TemplateMapping) (*string, error) {
+
+	docMap := make(map[string]interface{})
+	err := json.Unmarshal([]byte(sdata), &docMap)
+	if err != nil {
+		return nil, err
+	}
+	for fld, prop := range tm.Fields {
+		if dat, ok := docMap[fld]; ok {
+			convDate, err := date.DateFormat(prop.Format, dat)
+			if err != nil {
+				return nil, err
+			}
+			docMap[fld] = convDate
+		}
+	}
+	// Re-marshal the json nwo that we've t it
+	bdoc, err := json.Marshal(docMap)
+	if err != nil {
+		return nil, err
+	}
+	doc := string(bdoc)
+
+	return &doc, nil
 }

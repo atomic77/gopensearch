@@ -122,6 +122,7 @@ func TestAggTerms(t *testing.T) {
 }
 
 func TestDateHistogram(t *testing.T) {
+	t.Skip("Date histogram disabled atm")
 	d := &dsl.Dsl{}
 	q := `
 	{
