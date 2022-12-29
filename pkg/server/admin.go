@@ -3,6 +3,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -46,6 +47,27 @@ func (s *Server) ClusterStatusHandler(w http.ResponseWriter, r *http.Request) {
 	j, _ := json.Marshal(cs)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(j)
+}
+
+func (s *Server) CatalogIndicesHandler(w http.ResponseWriter, r *http.Request) {
+
+	idxMap, err := s.ListTables()
+
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "failure "+err.Error())
+		return
+	}
+
+	sb := strings.Builder{}
+
+	for idx, _ := range idxMap {
+		sb.WriteString(fmt.Sprintf("%s\t%s\t%s\n", "green", "open", idx))
+	}
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.Write([]byte(sb.String()))
+
 }
 
 /* Anything we don't have a handler set up for yet */

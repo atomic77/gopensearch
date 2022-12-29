@@ -2,6 +2,14 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
+	"log"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	require "github.com/alecthomas/assert/v2"
@@ -10,48 +18,103 @@ import (
 	"github.com/huandu/go-sqlbuilder"
 )
 
+var s Server
+
+func loadFixtureData() {
+	// This serves essentially as a mini-integration test of data loading since we'll
+	// use the bulk loader API to get data into our in-memory version of sqlite
+	// If there's a failure, we'll just crash because there's not much point
+	// continuing the rest of the suite
+	files, err := filepath.Glob("./testdata/*.ndjson")
+	if err != nil {
+		log.Fatal("failure loading fixtures " + err.Error())
+	}
+
+	if len(files) < 1 {
+		log.Fatal("Failed to find test fixtures")
+	}
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			log.Fatal("failure loading fixture " + err.Error())
+		}
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/_bulk", strings.NewReader(string(b)))
+		s.Router.ServeHTTP(rec, req)
+		if rec.Result().StatusCode != http.StatusOK {
+			log.Fatal("bulk load failed with response " + repr.String(rec))
+		}
+	}
+}
+
+func getResponse(t *testing.T, res *http.Response) *SearchResponse {
+	// Utility function to check that the response was successful, and send back
+	// a generic map of the JSON
+	require.Equal(t, res.StatusCode, http.StatusOK)
+
+	// d := make(map[string]interface{})
+	d := SearchResponse{}
+
+	b, err := io.ReadAll(res.Body)
+	require.NoError(t, err)
+	err = json.Unmarshal(b, &d)
+	require.NoError(t, err)
+
+	return &d
+}
+
+func TestMain(m *testing.M) {
+	fmt.Println("We're in TestMain!")
+
+	cfg := Config{
+		DbLocation: "file:memdb?mode=memory&cache=shared",
+		ListenAddr: "127.0.0.1",
+		Port:       13337,
+		Debug:      false,
+	}
+	s = Server{Cfg: cfg}
+	s.Init()
+	loadFixtureData()
+
+	os.Exit(m.Run())
+}
+
 func TestBasic(t *testing.T) {
 
-	d := &dsl.Dsl{}
 	q := `{
 	  "query": {
-		"term": {"foo": "bar"}
+		"term": {"serviceName": "frontend"}
 	  },
 	  "size": 1
     }`
-	err := json.Unmarshal([]byte(q), &d)
-	require.NoError(t, err)
-	plan, err2 := GenPlan("testindex", d)
-	if len(plan) != 1 {
-		t.Error("Expected only one query in plan")
-	}
-	require.NoError(t, err2)
-	repr.Println(plan)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/jaeger-service-2022-11-11/_search", strings.NewReader(q))
+	s.Router.ServeHTTP(rec, req)
+	d := getResponse(t, rec.Result())
+	require.Equal(t, len(d.Hits.Hits), 1)
 }
 
 func TestBool(t *testing.T) {
 
-	d := &dsl.Dsl{}
 	q := `
 	{
       "query":{
-		"bool":{"must":[{"term":{"foo":"bar"}}]}
+		"bool":{"must":[{"term":{"serviceName":"frontend"}}]}
 	  },
 	  "size": 1
     }`
-	err := json.Unmarshal([]byte(q), &d)
-	require.NoError(t, err)
-	plan, err2 := GenPlan("testindex", d)
-	require.NoError(t, err2)
-	if len(plan) != 1 {
-		t.Error("Expected only one query in plan")
-	}
-	repr.Println(plan)
-	repr.Println(plan[0].sb.String())
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/jaeger-service-2022-11-11/_search", strings.NewReader(q))
+	s.Router.ServeHTTP(rec, req)
+	d := getResponse(t, rec.Result())
+	require.Equal(t, len(d.Hits.Hits), 1)
 }
 
+// TODO Finish migrating the rest of these to be real tests of the functionality,
+// rather than just ensuring that the query plan looks good
 func TestSort(t *testing.T) {
-	d := &dsl.Dsl{}
 	q := `
 	{
 	  "query": {
@@ -59,15 +122,11 @@ func TestSort(t *testing.T) {
 	  },
 	  "sort":[{"asdf":{"order":"desc"}}]
     }`
-	err := json.Unmarshal([]byte(q), &d)
-	require.NoError(t, err)
-	plan, err2 := GenPlan("testindex", d)
-	if len(plan) != 1 {
-		t.Error("Expected only one query in plan")
-	}
-	require.NoError(t, err2)
-	repr.Println(plan)
-	repr.Println(plan[0].sb.String())
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/jaeger-service-2022-11-11/_search", strings.NewReader(q))
+	s.Router.ServeHTTP(rec, req)
+	d := getResponse(t, rec.Result())
+	require.Equal(t, len(d.Hits.Hits), 0)
 }
 
 func TestRange(t *testing.T) {

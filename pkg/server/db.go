@@ -7,12 +7,12 @@ import (
 
 	"github.com/atomic77/gopensearch/pkg/date"
 	"github.com/atomic77/gopensearch/pkg/dsl"
+	"github.com/huandu/go-sqlbuilder"
 	"github.com/jmoiron/sqlx"
 )
 
 func (s *Server) IndexDocument(doc string, index string) error {
-	// Crude implementation of ES index API; write our
-	// document into the doc TEXT blob with the given id
+
 	// Insert into fts5 index; rowid will be created automatically
 	sql := fmt.Sprintf(` INSERT INTO '%s' (content) VALUES (json(?)) `, index)
 
@@ -35,7 +35,7 @@ func (s *Server) IndexDocument(doc string, index string) error {
 
 	stmt, err := s.db.Prepare(sql)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer stmt.Close()
 
@@ -43,16 +43,14 @@ func (s *Server) IndexDocument(doc string, index string) error {
 	return err2
 }
 
-func (s *Server) CreateTable(index string) {
+func (s *Server) CreateTable(index string) error {
 	// Mimic the creation of an elasticsearch index with an FTS5 virtual table
 	sql := fmt.Sprintf(
 		`CREATE VIRTUAL TABLE IF NOT EXISTS "%s" USING fts5(content);`,
 		index,
 	)
 	_, err := s.db.Exec(sql, index)
-	if err != nil {
-		panic(err)
-	}
+	return err
 }
 
 /*
@@ -90,6 +88,31 @@ func (s *Server) SearchItem(index string, q *dsl.Dsl) ([]Document, map[string]Ag
 		}
 	}
 	return docs, aggs, nil
+}
+
+func (s *Server) ListTables() (map[string]interface{}, error) {
+	sb := sqlbuilder.NewSelectBuilder()
+	sb.Select("tbl_name").
+		From("sqlite_schema").
+		// Haven't figured out a better way to list out all of the FTS5-indices
+		Where(sb.Like("sql", "CREATE VIRTUAL TABLE%%fts5%"))
+
+	sql, args := sb.Build()
+	rows, err := s.db.Queryx(sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	indices := make(map[string]interface{})
+	for rows.Next() {
+		var tab string
+		rows.Scan(&tab)
+		indices[tab] = 42
+	}
+	// TODO Add more table metadata from "dbstat" schema; for now map this data to nothing
+	// since we'll use it just to check existance for now
+	// eg: select name, sum(pgsize) from dbstat where name like  'test-202206%' group by 1;
+	return indices, nil
 }
 
 func (m *BucketAggregation) SerializeResultset(rows *sqlx.Rows, dbq *dbSubQuery) {

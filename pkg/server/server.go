@@ -45,6 +45,7 @@ func (s *Server) registerRoutes() {
 	// Administrative functions
 	r.HandleFunc("/", s.HeadHandler).Methods("HEAD")
 	r.HandleFunc("/", s.ClusterStatusHandler).Methods("GET")
+	r.HandleFunc("/_cat/indices", s.CatalogIndicesHandler).Methods("GET")
 
 	// Template-related
 	r.HandleFunc("/_template/{index:[a-zA-Z0-9\\-]+}", s.CreateTemplateHandler).Methods("PUT")
@@ -81,11 +82,25 @@ func (s *Server) IndexDocumentHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	index := vars["index"]
 
-	b, _ := io.ReadAll(r.Body)
-	err := s.IndexDocument(string(b), index)
+	// Check if we need to implicitly create this index
+	idxMap, err := s.ListTables()
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(w, "failure "+err.Error())
+		handleErrorResponse(w, err)
+		return
+	}
+
+	if _, ok := idxMap[index]; !ok {
+		err = s.CreateTable(index)
+		if err != nil {
+			handleErrorResponse(w, err)
+			return
+		}
+	}
+
+	b, _ := io.ReadAll(r.Body)
+	err = s.IndexDocument(string(b), index)
+	if err != nil {
+		handleErrorResponse(w, err)
 		return
 	}
 	resp := IndexDocumentResponse{
@@ -107,7 +122,12 @@ func (s *Server) CreateIndexHandler(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		fmt.Fprintf(w, "index name is missing in parameters")
 	}
-	s.CreateTable(index)
+	err := s.CreateTable(index)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintf(w, "failure "+err.Error())
+		return
+	}
 	resp := CreateIndexResponse{
 		Acknowledged:       true,
 		ShardsAcknowledged: true,
@@ -234,6 +254,12 @@ func (s *Server) BulkHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	index := vars["index"]
 
+	// Current table map to see if we need to create any on the fly
+	idxMap, err := s.ListTables()
+	if err != nil {
+		handleErrorResponse(w, err)
+		return
+	}
 	var bulkReq map[string]interface{}
 	bulkResp := BulkResponse{
 		Took:  123,
@@ -285,21 +311,41 @@ func (s *Server) BulkHandler(w http.ResponseWriter, r *http.Request) {
 				idxType := bulkReq["index"].(map[string]interface{})
 				index = idxType["_index"].(string)
 
-				s.IndexDocument(string(b), index)
-				resp := BulkResponseItem{
-					Index:       index,
-					Id:          "123",
-					Type:        "_doc",
-					Version:     1,
-					SeqNo:       3,
-					PrimaryTerm: 1,
-					Result:      "created",
-					Shards:      MakeShardsInfo(),
-					// Error:   map[string]string{},
-					Status: 201,
+				// Check if we need to create a table implicitly
+				if _, ok := idxMap[index]; !ok {
+					err = s.CreateTable(index)
+					if err != nil {
+						handleErrorResponse(w, err)
+						return
+					}
+					idxMap[index] = 42
 				}
-				var respWrapped = map[string]BulkResponseItem{"index": resp}
-				bulkResp.Items = append(bulkResp.Items, respWrapped)
+				err = s.IndexDocument(string(b), index)
+				if err == nil {
+
+					resp := BulkResponseItem{
+						Index:       index,
+						Id:          "123",
+						Type:        "_doc",
+						Version:     1,
+						SeqNo:       3,
+						PrimaryTerm: 1,
+						Result:      "created",
+						Shards:      MakeShardsInfo(),
+						// Error:   map[string]string{},
+						Status: 201,
+					}
+					var respWrapped = map[string]BulkResponseItem{"index": resp}
+					bulkResp.Items = append(bulkResp.Items, respWrapped)
+				} else {
+
+					if err != nil {
+						w.WriteHeader(http.StatusInternalServerError)
+						fmt.Fprintf(w, "failure during bulk indexing: "+err.Error())
+						return
+					}
+
+				}
 			}
 
 		case "update", "create", "delete":
