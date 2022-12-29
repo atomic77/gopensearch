@@ -97,7 +97,7 @@ func (dbq *dbSubQuery) handleBool(b *dsl.Bool) error {
 
 func (dbq *dbSubQuery) handleMatch(matches map[string]dsl.Match) error {
 	// TODO This is just a glorified terms query now - need to add support for
-	// other match functionality
+	// other match capabilities and start leveraging FTS5's capabilities
 	for _key, val := range matches {
 		key := cleanseKeyField(_key)
 		iVal, err := strconv.ParseInt(val.Query, 10, 64)
@@ -134,7 +134,7 @@ func cleanseKeyField(f string) string {
 }
 
 func (dbq *dbSubQuery) handleRange(rngFlds map[string]dsl.Range) error {
-	// Currently only working for date ranges
+	// TODO Currently only working for date ranges
 	fmtStr := "epoch_millis"
 	var (
 		dVal *string
@@ -184,7 +184,6 @@ func (dbq *dbSubQuery) genSort(sortFields []map[string]dsl.Sort) {
 }
 
 func (dbq *dbSubQuery) genSelectExpression() {
-	//
 	dbq.sb.Select(dbq.selectExprs...)
 }
 
@@ -195,10 +194,11 @@ func (dbq *dbSubQuery) genHitsSelect(index string, _q *dsl.Dsl) {
 		From(fmt.Sprintf(`"%s"`, index))
 }
 
-// Returns the field expression for the select, and the alias for the group by
+// TODO Overdue for an overhaul and/or refactor once we try to enable
+// support for real subqueries generated from nested aggregate clauses. For now
+// it can handle only simple aggregate cases
 func (dbq *dbSubQuery) genAggregateSelectExprs(agg *dsl.Aggregate) {
 
-	// for _, agg := range root.Aggs {
 	grpIdx := dbq.getNextGrpAlias()
 	fnIdx := dbq.getNextFnAlias()
 

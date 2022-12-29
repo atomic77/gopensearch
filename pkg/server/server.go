@@ -151,9 +151,8 @@ func (m BucketAggregation) GetAggregateCategory() dsl.AggregationCategory {
 }
 
 func (bkt *Bucket) MarshalJSON() ([]byte, error) {
-	// Found this approach here: https://stackoverflow.com/a/59923606
-	// feels like there has to be a better way to optionally tack on some
-	// extra stuff to the JSON we serialize by default...
+	// TODO Originally found this approach here: https://stackoverflow.com/a/59923606
+	// Move to json marshalling approaches used in dsl package
 	type Bucket_ Bucket
 	b, err := json.Marshal(Bucket_(*bkt))
 	if err != nil {
@@ -176,7 +175,6 @@ func (s *Server) SearchDocumentHandler(w http.ResponseWriter, r *http.Request) {
 
 	buf, _ := io.ReadAll(r.Body)
 	q := &dsl.Dsl{}
-	// err = dsl.DslParser.ParseString("", buf.String(), q)
 	err := json.Unmarshal(buf, &q)
 
 	if err != nil {
@@ -402,7 +400,7 @@ func (s *Server) MSearchHandler(w http.ResponseWriter, r *http.Request) {
 		if msearchHeader.Index != nil {
 			sr, err = s.getSearchResponse(*msearchHeader.Index, qDsl)
 		} else if msearchHeader.Indices != nil {
-			// TODO Search only the first for now until we can enable search
+			// FIXME Search only the first for now until we can enable search
 			// support against multiple indices seamlessly
 			sr, err = s.getSearchResponse(*msearchHeader.Indices[0], qDsl)
 

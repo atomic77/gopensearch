@@ -1,0 +1,51 @@
+# Demo
+# Use jaeger all-in-one with gopensearch as a drop-in replacement for ES
+
+version: '3'
+services:
+
+  gopensearch:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 9200:9200
+    networks:
+      - default
+    command: -port 9200 -db /tmp/test.db
+
+  hotrod:
+    image: jaegertracing/example-hotrod:latest
+    ports:
+      - '8080:8080'
+      - '8081:8081'
+      - '8082:8082'
+      - '8083:8083'
+    command: ["frontend"]
+    # command: ["all"]
+    environment:
+      - JAEGER_AGENT_HOST=jaeger-all-in-one
+      - JAEGER_AGENT_PORT=6831
+    networks:
+      - default
+    depends_on:
+      - jaeger-all-in-one
+
+  jaeger-all-in-one:
+    image: jaegertracing/all-in-one:latest
+    environment: 
+      - SPAN_STORAGE_TYPE=elasticsearch
+      - ES_SERVER_URLS=http://gopensearch:9200
+    ports:
+      - "16686:16686"
+      - "16687:16687"
+    networks:
+      - default
+    depends_on:
+      - gopensearch
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 10.9.7.0/28

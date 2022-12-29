@@ -2,7 +2,8 @@
 
 A lightweight single-process reimplementation of \[elastic|open\]search. Built with golang and sqlite3 as the backend data store, using the `fts5` and `json1` extensions.  
 
-Aims to provide an ES-compatible implementation in constrained environments like SBCs / raspberry pis, dev-test scenarios and test pipelines. 
+Aims to provide an ES-compatible implementation for constrained environments like SBCs / raspberry pis, dev-test scenarios and test pipelines, or anyone that just wants ES to 
+start up quickly and use less memory. 
 
 The full API is massive and most of it is unlikely to be implemented, though I imagine that there are plenty of people out there using only a small subset of its capabilities.
 
@@ -11,7 +12,7 @@ The full API is massive and most of it is unlikely to be implemented, though I i
 Basic support for:
 * Index and document creation
 * Bulk doc creation
-* Basic support for term/match queries against string fields
+* Term/match queries
 * Templates
   * Support for mapping date fields using ES format types like `epoch_millis` 
 * Bool must/should compound queries 
@@ -20,15 +21,48 @@ Basic support for:
   * Limited to those that can be easily mapped to a single SQL statement (eg. single metric aggregate coupled with terms)
 
 Near-term goals:
-* Enable out-of-box support for [Jaeger](https://github.com/jaegertracing/jaeger/), an OSS application that can use ES as a storage backend
-* Improved test case coverage
-* Improved documentation for what is supported and what isn't, and improved error messages when unsupported features are used
+* Wild-card and explicit multiple index searching
+* Improved date formatting
+* Date histograms
+* Documentation for what is supported and what isn't
+* Improved integration tests 
+* Artifact releases (docker image and binary build) direct to github
 
 Future work:
 * Indexing and storage optimizations in sqlite usage
 
 Out of scope:
 * Most things :) Clustering, sharding, painless lang, etc.
+
+## Demo
+
+For an example use of Gopensearch, there is a demo docker-compose file that brings up [Jaeger all-in-one](https://github.com/jaegertracing/jaeger/), the "HotRod"
+trace generator, and a test instance of Gopensearch running in place of Elasticsearch. You can start it with:
+
+```bash
+$ docker-compose -f docker-compose-demo.yml up
+Starting gopensearch_gopensearch_1 ... done
+Starting gopensearch_jaeger-all-in-one_1 ... done
+Starting gopensearch_hotrod_1            ... done
+Attaching to gopensearch_gopensearch_1, gopensearch_jaeger-all-in-one_1, gopensearch_hotrod_1
+gopensearch_1        | 2022/12/29 22:38:15 server.Config{DbLocation: "/tmp/test.db", ListenAddr: "0.0.0.0", Port: 9200, }
+gopensearch_1        | 2022/12/29 22:38:15 Starting server on 0.0.0.0:9200
+...
+
+```
+
+The indices created automatically can be viewed with:
+
+```bash
+$ curl http://localhost:9200/_cat/indices
+green	open	jaeger-service-2022-12-29
+green	open	jaeger-span-2022-12-29
+```
+
+The HotRod GUI will be available on http://localhost:8080, and the Jaeger UI available at http://localhost:16686:
+
+![jaeger-GUI](./doc/jaeger-ui.png){width=500}
+
 
 ## Building
 

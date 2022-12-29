@@ -53,14 +53,6 @@ func (s *Server) CreateTable(index string) error {
 	return err
 }
 
-/*
-Example sqlite query to do FT-searching + json-based filtering:
-
-select json(ftidx.content) from ftidx
-where json_extract(ftidx.content, '$.a') = 123
-and ftidx MATCH 'earth';
-
-*/
 func (s *Server) SearchItem(index string, q *dsl.Dsl) ([]Document, map[string]Aggregation, error) {
 	var (
 		aggs map[string]Aggregation
@@ -133,16 +125,12 @@ func (m *BucketAggregation) SerializeResultset(rows *sqlx.Rows, dbq *dbSubQuery)
 			break
 		}
 
-		// TODO Another hack - just assume the first AggTerms instance we see is
-		// the entry we want to put in the main Buckets{} struct
-		// All of these type conversions need to be converted into appropriate
-		// interface implementations to clean this up
 		for k, v := range dbq.fnAliases {
 			if _, ok := v.(*dsl.AggTerms); ok {
 				b.DocCount = dest[k].(int64)
 			}
 			if af, ok := v.(*dsl.AggField); ok {
-				// Extract this struct literal out
+				// TODO Extract this struct literal out
 				var destVal string
 				if val, ok := dest[k].(string); ok {
 					destVal = val

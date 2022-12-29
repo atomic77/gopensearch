@@ -113,7 +113,7 @@ func TestBool(t *testing.T) {
 }
 
 // TODO Finish migrating the rest of these to be real tests of the functionality,
-// rather than just ensuring that the query plan looks good
+// rather than just ensuring that the query plan looks sane
 func TestSort(t *testing.T) {
 	q := `
 	{

@@ -4,9 +4,6 @@ import (
 	"encoding/json"
 )
 
-// Another useful example with a json-like custom DSL
-// https://github.com/alecthomas/participle/discussions/207
-
 // https://www.elastic.co/guide/en/elasticsearch/reference/current/search-search.html#search-search-api-example
 // https://www.elastic.co/guide/en/elasticsearch/reference/7.17/query-dsl-match-query.html
 
@@ -26,9 +23,6 @@ type Query struct {
 	RawMatch map[string]interface{} `json:"match"`
 	Match    map[string]Match
 
-	// TODO This also needs to be able to handle shorthand forms
-	// that can provide additional properties like boost:
-	// https://www.elastic.co/guide/en/elasticsearch/reference/7.17/query-dsl-term-query.html
 	RawTerm map[string]interface{} `json:"term"`
 	Term    map[string]Term
 
