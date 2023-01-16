@@ -39,8 +39,8 @@ func (s *Server) registerRoutes() {
 	r.HandleFunc("/{index:[a-zA-Z0-9\\-]+}/_bulk", s.BulkHandler).Methods("POST")
 	r.HandleFunc("/_bulk", s.BulkHandler).Methods("POST")
 
-	r.HandleFunc("/{index:[a-zA-Z0-9\\-]+}/_msearch", s.MSearchHandler).Methods("GET")
-	r.HandleFunc("/_msearch", s.MSearchHandler).Methods("GET")
+	r.HandleFunc("/{index:[a-zA-Z0-9\\-]+}/_msearch", s.MSearchHandler).Methods("GET", "POST")
+	r.HandleFunc("/_msearch", s.MSearchHandler).Methods("GET", "POST")
 
 	// Administrative functions
 	r.HandleFunc("/", s.HeadHandler).Methods("HEAD")
@@ -48,7 +48,9 @@ func (s *Server) registerRoutes() {
 	r.HandleFunc("/_cat/indices", s.CatalogIndicesHandler).Methods("GET")
 
 	// Template-related
-	r.HandleFunc("/_template/{index:[a-zA-Z0-9\\-]+}", s.CreateTemplateHandler).Methods("PUT")
+	r.HandleFunc("/_template/{target:[a-zA-Z0-9\\-]+}", s.CreateTemplateHandler).Methods("PUT")
+	r.HandleFunc("/{target:[a-zA-Z0-9\\-]+}/_mapping", s.GetMappingDefinitionHandler).Methods("GET")
+	r.HandleFunc("/_mapping", s.GetMappingDefinitionHandler).Methods("GET")
 
 	r.PathPrefix("/").HandlerFunc(s.DefaultHandler)
 	if s.Cfg.Debug {
@@ -307,7 +309,9 @@ func (s *Server) BulkHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				// FIXME Properly parse this structure
 				idxType := bulkReq["index"].(map[string]interface{})
-				index = idxType["_index"].(string)
+				if idx, ok := idxType["_index"].(string); ok {
+					index = idx
+				}
 
 				// Check if we need to create a table implicitly
 				if _, ok := idxMap[index]; !ok {

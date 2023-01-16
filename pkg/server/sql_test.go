@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -65,7 +64,6 @@ func getResponse(t *testing.T, res *http.Response) *SearchResponse {
 }
 
 func TestMain(m *testing.M) {
-	fmt.Println("We're in TestMain!")
 
 	cfg := Config{
 		DbLocation: "file:memdb?mode=memory&cache=shared",
@@ -112,8 +110,11 @@ func TestBool(t *testing.T) {
 	require.Equal(t, len(d.Hits.Hits), 1)
 }
 
+//////////////////
 // TODO Finish migrating the rest of these to be real tests of the functionality,
 // rather than just ensuring that the query plan looks sane
+//////////////////
+
 func TestSort(t *testing.T) {
 	q := `
 	{
@@ -181,32 +182,26 @@ func TestAggTerms(t *testing.T) {
 }
 
 func TestDateHistogram(t *testing.T) {
-	t.Skip("Date histogram disabled atm")
-	d := &dsl.Dsl{}
 	q := `
-	{
-	    "aggs":{
-			"dates": {
-				"date_histogram":{"field":"Time","buckets":200},
-			}
-	        "generalStatus":{
-	            "terms":{"field":"foo"}
-			}
-	    },
-	    "size":0
-	}
+		{
+			"aggs":{
+				"dates": {
+					"date_histogram":{"field":"startTimeMillis","buckets":200}
+				},
+				"generalStatus":{
+					"terms":{"field":"foo"}
+				}
+			},
+			"size":0
+		}
     `
-	err := json.Unmarshal([]byte(q), &d)
-	require.NoError(t, err)
-	plan, err2 := GenPlan("testindex", d)
-	if len(plan) != 3 {
-		t.Error("Expected 3 queries in plan")
-	}
-	if plan[0].aggregation == nil && plan[0].aggregation.GetAggregateCategory() == dsl.MetricsSingle {
-		t.Error("Expected an aggregation query first")
-	}
-	require.NoError(t, err2)
-	repr.Println(plan)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/jaeger-span-2022-11-11/_search", strings.NewReader(q))
+	s.Router.ServeHTTP(rec, req)
+	d := getResponse(t, rec.Result())
+
+	require.Equal(t, len(d.Hits.Hits), 1)
+
 }
 
 func TestSubAggregate(t *testing.T) {

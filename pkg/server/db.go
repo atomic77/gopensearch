@@ -117,9 +117,12 @@ func (m *BucketAggregation) SerializeResultset(rows *sqlx.Rows, dbq *dbSubQuery)
 		}
 		// FIXME Assume the first group element is the key we want
 		for k := range dbq.groupAliases {
-			if v, ok := dest[k].(string); ok {
-				b.Key = v
-			} else {
+			switch d := dest[k].(type) {
+			case string:
+				b.Key = d
+			case int64:
+				b.Key = fmt.Sprintf("%d", d)
+			default:
 				b.Key = ""
 			}
 			break

@@ -18,7 +18,7 @@ type Server struct {
 	db               *sqlx.DB
 	Router           http.Handler
 	Cfg              Config
-	TemplateMappings []TemplateMapping
+	TemplateMappings map[string]TemplateMapping
 }
 
 type Document struct {
@@ -113,10 +113,13 @@ type BulkResponseItem struct {
 type MSearchHeader struct {
 	IgnoreUnavailable *bool   `json:"ignore_unavailable"`
 	Index             *string `json:"index"`
+
 	// Can't find any documentation about this, but appears to be supported by ES
 	// in use in the wild
 	Indices []*string `json:"indices"`
 	// TODO More options to implement
+	SearchType                 *string `json:"search_type"`
+	MaxConcurrentShardRequests int     `json:"max_concurrent_shard_requests"`
 }
 
 type MSearchResponse struct {
