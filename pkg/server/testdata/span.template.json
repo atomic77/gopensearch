@@ -1,0 +1,10 @@
+{
+    "index_patterns": "*jaeger-span*",
+    "properties": {
+        "startTimeMillis": {
+            "type": "date",
+            "ignore_above": 0,
+            "format": "epoch_millis"
+        }
+    }
+}

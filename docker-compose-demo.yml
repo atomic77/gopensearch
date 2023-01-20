@@ -45,14 +45,13 @@ services:
       - gopensearch
 
   grafana:
-    # user: "1000:1000"
     image: grafana/grafana:8.2.6
     container_name: grafana
     restart: unless-stopped
     volumes:
       - grafdata:/var/lib/grafana:rw
     ports: 
-      - '3030:3000'
+      - '3000:3000'
 
 
 networks:

@@ -28,6 +28,8 @@ type Query struct {
 
 	Bool  *Bool            `json:"bool"`
 	Range map[string]Range `json:"range"`
+
+	QueryString *QueryString `json:"query_string"`
 }
 
 type Term struct {
@@ -47,6 +49,9 @@ type Bool struct {
 	Must      []Query
 	RawShould json.RawMessage `json:"should"`
 	Should    []Query
+	// Filter is similar to must, but not relevant to scoring, which we don't really use for
+	// the moment anyway so it's basically the same.
+	Filter []Query `json:"filter"`
 }
 
 type Range struct {
@@ -72,4 +77,11 @@ type Range struct {
 type Sort struct {
 	Order string `json:"order"`
 	Mode  string `json:"mode"`
+}
+
+// https://www.elastic.co/guide/en/elasticsearch/reference/7.17/query-dsl-query-string-query.htmlj
+type QueryString struct {
+	Query           string `json:"query"`
+	AnalyzeWildcard bool   `json:"analyze_wildcard"`
+	DefaultField    string `json:"default_field"`
 }

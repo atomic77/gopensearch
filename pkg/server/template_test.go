@@ -37,11 +37,10 @@ func TestTemplateParse(t *testing.T) {
 func TestRegexp(t *testing.T) {
 	// ES and Golang regexps need to be made to play nicely
 	pat := "*jaeger-service-*"
-	regex := regexp.MustCompile(pat)
+	regex := cleanseIndexPattern(pat)
 	s := "jaeger-service-2023-01-01"
-	// match, _ := regexp.MatchString(,
-	match := regex.FindString(s)
+	match, _ := regexp.MatchString(regex, s)
 
-	require.Equal(t, match, s)
+	require.Equal(t, match, true)
 
 }

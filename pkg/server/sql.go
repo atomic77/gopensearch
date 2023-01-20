@@ -74,12 +74,15 @@ func (dbq *dbSubQuery) genQueryWherePredicates(q *dsl.Dsl) error {
 		dbq.handleMatch(q.Query.Match)
 	} else if q.Query.Range != nil {
 		dbq.handleRange(q.Query.Range)
+	} else if q.Query.QueryString != nil {
+		dbq.handleQueryString(q.Query.QueryString)
 	}
 
 	return nil
 }
 
 func (dbq *dbSubQuery) handleBool(b *dsl.Bool) error {
+
 	if b.Must != nil {
 		for _, v := range b.Must {
 			if v.Match != nil {
@@ -88,10 +91,35 @@ func (dbq *dbSubQuery) handleBool(b *dsl.Bool) error {
 				dbq.handleTerm(v.Term)
 			} else if v.Range != nil {
 				dbq.handleRange(v.Range)
+			} else if v.QueryString != nil {
+				dbq.handleQueryString(v.QueryString)
+			}
+		}
+	} else if b.Should != nil {
+		for _, v := range b.Should {
+			if v.Match != nil {
+				dbq.handleMatch(v.Match)
+			} else if v.Term != nil {
+				dbq.handleTerm(v.Term)
+			} else if v.Range != nil {
+				dbq.handleRange(v.Range)
+			} else if v.QueryString != nil {
+				dbq.handleQueryString(v.QueryString)
+			}
+		}
+	} else if b.Filter != nil {
+		for _, v := range b.Filter {
+			if v.Match != nil {
+				dbq.handleMatch(v.Match)
+			} else if v.Term != nil {
+				dbq.handleTerm(v.Term)
+			} else if v.Range != nil {
+				dbq.handleRange(v.Range)
+			} else if v.QueryString != nil {
+				dbq.handleQueryString(v.QueryString)
 			}
 		}
 	}
-	//  else if b.Should != nil {
 	return nil
 }
 
@@ -167,6 +195,14 @@ func (dbq *dbSubQuery) handleRange(rngFlds map[string]dsl.Range) error {
 	return nil
 }
 
+func (dbq *dbSubQuery) handleQueryString(qs *dsl.QueryString) error {
+	// TODO Make a best effort to convert ES/Lucene's query format to sqlite
+	// Pass string as is to FTS5 GLOB operator for now
+
+	dbq.sb.Where(fmt.Sprintf(` content GLOB '%s'`, qs.Query))
+
+	return nil
+}
 func (dbq *dbSubQuery) genSort(sortFields []map[string]dsl.Sort) {
 
 	if len(sortFields) == 0 {

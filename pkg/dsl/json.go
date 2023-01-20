@@ -95,36 +95,43 @@ func (bl *Bool) UnmarshalJSON(b []byte) error {
 	if err = json.Unmarshal(b, &base); err != nil {
 		return err
 	}
+	// Let's hope we don't discover any dual cases for Filter
+	bl.Filter = base.Filter
+
 	m1 := Query{}
 	m2 := make([]Query, 0)
 
-	// Must can be provided with a single object or an array
-	err = json.Unmarshal(base.RawMust, &m1)
-	if err == nil {
-		bl.Must = append(bl.Must, m1)
-		return nil
-	}
+	if base.RawMust != nil {
+		// Must can be provided with a single object or an array
+		err = json.Unmarshal(base.RawMust, &m1)
+		if err == nil {
+			bl.Must = append(bl.Must, m1)
+			return nil
+		}
 
-	err = json.Unmarshal(base.RawMust, &m2)
-	if err == nil {
-		bl.Must = m2
-		return nil
+		err = json.Unmarshal(base.RawMust, &m2)
+		if err == nil {
+			bl.Must = m2
+			return nil
+		}
 	}
 	// TODO This approach to handling these variable types needs to be
 	// generalized somehow
 	// Should can also be provided with a single object or an array
-	m1 = Query{}
-	m2 = make([]Query, 0)
-	err = json.Unmarshal(base.RawShould, &m1)
-	if err == nil {
-		bl.Should = append(bl.Should, m1)
-		return nil
-	}
+	if base.RawShould != nil {
+		m1 = Query{}
+		m2 = make([]Query, 0)
+		err = json.Unmarshal(base.RawShould, &m1)
+		if err == nil {
+			bl.Should = append(bl.Should, m1)
+			return nil
+		}
 
-	err = json.Unmarshal(base.RawShould, &m2)
-	if err == nil {
-		bl.Should = m2
-		return nil
+		err = json.Unmarshal(base.RawShould, &m2)
+		if err == nil {
+			bl.Should = m2
+			return nil
+		}
 	}
 
 	return err

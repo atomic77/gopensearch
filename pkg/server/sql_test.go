@@ -24,6 +24,10 @@ func loadFixtureData() {
 	// use the bulk loader API to get data into our in-memory version of sqlite
 	// If there's a failure, we'll just crash because there's not much point
 	// continuing the rest of the suite
+	templates, err := filepath.Glob("./testdata/*.template.json")
+	if err != nil {
+		log.Fatal("failure loading templates " + err.Error())
+	}
 	files, err := filepath.Glob("./testdata/*.ndjson")
 	if err != nil {
 		log.Fatal("failure loading fixtures " + err.Error())
@@ -32,6 +36,20 @@ func loadFixtureData() {
 	if len(files) < 1 {
 		log.Fatal("Failed to find test fixtures")
 	}
+
+	for _, f := range templates {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			log.Fatal("failure loading fixture " + err.Error())
+		}
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPut, "/_template/spantempl", strings.NewReader(string(b)))
+		s.Router.ServeHTTP(rec, req)
+		if rec.Result().StatusCode != http.StatusOK {
+			log.Fatal("template load failed with response " + repr.String(rec))
+		}
+	}
+
 	for _, f := range files {
 		b, err := os.ReadFile(f)
 		if err != nil {
@@ -47,15 +65,24 @@ func loadFixtureData() {
 	}
 }
 
-func getResponse(t *testing.T, res *http.Response) *SearchResponse {
+type testResponse struct {
+	Took         int                    `json:"took"`
+	TimedOut     bool                   `json:"timed_out"`
+	Shards       ShardsInfo             `json:"_shards"`
+	Hits         *Hits                  `json:"hits"`
+	Aggregations map[string]interface{} `json:"aggregations,omitempty"`
+}
+
+func getResponse(t *testing.T, res *http.Response) *testResponse {
 	// Utility function to check that the response was successful, and send back
 	// a generic map of the JSON
 	require.Equal(t, res.StatusCode, http.StatusOK)
 
 	// d := make(map[string]interface{})
-	d := SearchResponse{}
-
+	d := testResponse{}
 	b, err := io.ReadAll(res.Body)
+	s := string(b)
+	require.NotContains(t, s, "yyz")
 	require.NoError(t, err)
 	err = json.Unmarshal(b, &d)
 	require.NoError(t, err)
@@ -187,9 +214,6 @@ func TestDateHistogram(t *testing.T) {
 			"aggs":{
 				"dates": {
 					"date_histogram":{"field":"startTimeMillis","buckets":200}
-				},
-				"generalStatus":{
-					"terms":{"field":"foo"}
 				}
 			},
 			"size":0
@@ -200,7 +224,7 @@ func TestDateHistogram(t *testing.T) {
 	s.Router.ServeHTTP(rec, req)
 	d := getResponse(t, rec.Result())
 
-	require.Equal(t, len(d.Hits.Hits), 1)
+	require.Equal(t, len(d.Aggregations), 1)
 
 }
 

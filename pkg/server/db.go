@@ -129,10 +129,11 @@ func (m *BucketAggregation) SerializeResultset(rows *sqlx.Rows, dbq *dbSubQuery)
 		}
 
 		for k, v := range dbq.fnAliases {
-			if _, ok := v.(*dsl.AggTerms); ok {
+			switch d := v.(type) {
+			case *dsl.AggTerms:
+			case *dsl.DateHistogram:
 				b.DocCount = dest[k].(int64)
-			}
-			if af, ok := v.(*dsl.AggField); ok {
+			case *dsl.AggField:
 				// TODO Extract this struct literal out
 				var destVal string
 				if val, ok := dest[k].(string); ok {
@@ -140,7 +141,7 @@ func (m *BucketAggregation) SerializeResultset(rows *sqlx.Rows, dbq *dbSubQuery)
 				} else if val, ok := dest[k].(int64); ok {
 					destVal = fmt.Sprintf("%d", val)
 				}
-				b.subaggregates[af.Field] = struct {
+				b.subaggregates[d.Field] = struct {
 					Value         string `json:"value,omitempty"`
 					ValueAsString string `json:"value_as_string,omitempty"`
 				}{
@@ -168,7 +169,7 @@ func (m *MetricSingleAggregation) SerializeResultset(rows *sqlx.Rows, dbq *dbSub
 
 func (s *Server) execHitsSubquery(index string, q dbSubQuery) []Document {
 
-	var docs []Document
+	docs := make([]Document, 0)
 	if s.Cfg.Debug {
 		log.Println(q.sb.String())
 	}

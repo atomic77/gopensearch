@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/huandu/go-sqlbuilder"
@@ -44,6 +45,13 @@ func makeTemplateMapping() TemplateMapping {
 	return t
 }
 
+// TODO Elasticsearch supports patterns like *-my-idx-*, which golang's RE
+// engine doesn't accept. Quick and dirty transform all '*' to '.*',
+// look into a proper solution
+func cleanseIndexPattern(idx string) string {
+	return strings.ReplaceAll(idx, "*", ".*")
+}
+
 func (s *Server) CreateTemplateHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	target, ok := vars["target"]
@@ -56,6 +64,7 @@ func (s *Server) CreateTemplateHandler(w http.ResponseWriter, r *http.Request) {
 
 	req := CreateTemplateRequest{}
 	err = json.Unmarshal(buf, &req)
+	req.IndexPatterns = cleanseIndexPattern(req.IndexPatterns)
 
 	if err != nil {
 		handleErrorResponse(w, errors.New("unable to parse json "+err.Error()))
